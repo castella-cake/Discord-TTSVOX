@@ -33,6 +33,10 @@ client.once("ready", async () => {
     {
         name: "setvoice",
         description: "ボイス変更メニューを開きます。設定はあなた以外には見えません。"
+    },
+    {
+        name: "credit",
+        description: "クレジットを表示します。"
     }];
     await client.application.commands.set(data);
     console.log("Ready!");
@@ -132,26 +136,24 @@ client.on("interactionCreate", async (interaction) => {
         } else if (interaction.commandName === 'setvoice') {
             const select = new StringSelectMenuBuilder()
                 .setCustomId('setvoicepanel')
-                .setPlaceholder('Make a selection!')
+                .setPlaceholder('ボイスを選択')
                 .addOptions(
                     new StringSelectMenuOptionBuilder()
-                        .setLabel('Bulbasaur')
-                        .setDescription('The dual-type Grass/Poison Seed Pokémon.')
-                        .setValue('bulbasaur'),
-                    new StringSelectMenuOptionBuilder()
-                        .setLabel('Charmander')
-                        .setDescription('The Fire-type Lizard Pokémon.')
-                        .setValue('charmander'),
-                    new StringSelectMenuOptionBuilder()
-                        .setLabel('Squirtle')
-                        .setDescription('The Water-type Tiny Turtle Pokémon.')
-                        .setValue('squirtle'),
+                        .setLabel('ラベル')
+                        .setDescription('概要')
+                        .setValue('val'),
                 );
             const row = new ActionRowBuilder()
                 .addComponents(select);
             await interaction.reply({
-                content: 'Choose your starter!',
+                content: 'ボイスを選択',
                 components: [row],
+                ephemeral: true
+            });
+        } else if (interaction.commandName === 'credit') {
+            let speakersnamearray = speakersdata.map((elem) => elem.name)
+            await interaction.reply({
+                content: `VOICEVOX: ${speakersnamearray.join(',')}`,
                 ephemeral: true
             });
         } else {
