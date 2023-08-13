@@ -1,6 +1,5 @@
 const { Client, GatewayIntentBits, Partials, ChannelType, ApplicationCommandOptionType, ActivityType, ActionRowBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, } = require('discord.js');
 const { joinVoiceChannel, getVoiceConnection, createAudioPlayer, createAudioResource } = require('@discordjs/voice');
-const got = require('got');
 const { bot_token } = require('./config.json');
 const userdata = require('./userdata.json');
 const fs = require("fs");
