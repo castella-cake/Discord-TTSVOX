@@ -1,0 +1,23 @@
+{
+  "name": "discord-ttsvox",
+  "version": "0.0.1",
+  "description": "Discord VOICEVOX TTSBot",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/castella-cake/Discord-TTSVOX.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/castella-cake/Discord-TTSVOX/issues"
+  },
+  "homepage": "https://github.com/castella-cake/Discord-TTSVOX#readme",
+  "dependencies": {
+    "@discordjs/voice": "^0.16.0",
+    "discord.js": "^14.12.1"
+  }
+}
