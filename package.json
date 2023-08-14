@@ -1,6 +1,6 @@
 {
   "name": "discord-ttsvox",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Discord VOICEVOX TTSBot",
   "main": "index.js",
   "scripts": {
@@ -18,8 +18,11 @@
   "homepage": "https://github.com/castella-cake/Discord-TTSVOX#readme",
   "dependencies": {
     "@discordjs/voice": "^0.16.0",
+    "@keyv/sqlite": "^3.6.5",
     "discord.js": "^14.12.1",
     "ffmpeg-static": "^5.1.0",
-    "libsodium-wrappers": "^0.7.11"
+    "keyv": "^4.5.3",
+    "libsodium-wrappers": "^0.7.11",
+    "pif": "^0.1.1"
   }
 }

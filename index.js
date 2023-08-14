@@ -1,23 +1,26 @@
-const { Client, GatewayIntentBits, Partials, ChannelType, ApplicationCommandOptionType, ActivityType, ActionRowBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, } = require('discord.js');
+const { Client, GatewayIntentBits, Partials, ChannelType, ApplicationCommandOptionType, ActivityType, ActionRowBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, InteractionType } = require('discord.js');
 const { joinVoiceChannel, getVoiceConnection, createAudioPlayer, createAudioResource } = require('@discordjs/voice');
-const { bot_token } = require('./config.json');
-const userdata = require('./userdata.json');
+const { bot_token, initial_userdata } = require('./config.json');
 const fs = require("fs");
+const Keyv = require('keyv')
+const userdata = new Keyv('sqlite://db.sqlite', { table: 'userobj' })
 
 const client = new Client({ intents: [ GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates, GatewayIntentBits.GuildMessages, GatewayIntentBits.GuildMembers, GatewayIntentBits.MessageContent ], partials: [Partials.Channel] });
 
+userdata.on('error', err => console.error('Keyv connection error:', err))
 
 let isready = false
 let speakersdata = []
 const player = createAudioPlayer();
+let speakersnamearray = []
 
 client.once("ready", async () => {
     client.user.setPresence({
-        activities: [{ name: `お待ちください…`, type: ActivityType.Watching }],
+        activities: [{ name: `VOICEVOXエンジンに連絡中`, type: ActivityType.Watching }],
         status: 'dnd',
     });
     // スラッシュコマンドを作成する
-    const data = [{
+    const cmddata = [{
         name: "ping",
         description: "Replies with Pong!",
     },
@@ -31,51 +34,68 @@ client.once("ready", async () => {
     },
     {
         name: "setvoice",
-        description: "ボイス変更メニューを開きます。設定はあなた以外には見えません。"
+        description: "話者を変更します。実行すると、スタイルの選択パネルが表示されます。設定はあなた以外には見えません。",
+        options: [{
+            type: ApplicationCommandOptionType.String,
+            name: "speakername",
+            description: "話者名を入力",
+            required: true
+        }],
     },
     {
         name: "credit",
         description: "クレジットを表示します。"
     }];
-    await client.application.commands.set(data);
-    console.log("Ready!");
-
-    client.user.setPresence({
-        activities: [{ name: `VOICEVOXエンジンに連絡中`, type: ActivityType.Watching }],
-        status: 'dnd',
-    });
-    // VOICEVOXエンジンに接続可能か確認する。
-    fetch(`http://127.0.0.1:50021/version`, {
-        method: "GET"
-    }).then(response => {
-        if ( response.status == 200 ) {
-            response.text().then(text => {
-                console.log(`VOICEVOX ENGINE: ${text}`)
-            })
-            // OKだったら、話者情報も取得する
-            client.user.setPresence({
-                activities: [{ name: `エンジンから情報取得中`, type: ActivityType.Watching }],
-                status: 'dnd',
-            });
-            fetch(`http://127.0.0.1:50021/speakers`, {
-                method: "GET"
-            }).then(response => {
-                if ( response.status === 200 ) {
-                    response.text().then(data => {
-                        speakersdata = JSON.parse(data)
-                        // isreadyを立ててコマンドの受付を開始する
-                        client.user.setPresence({
-                            activities: [{ name: `READY`, type: ActivityType.Playing }],
-                            status: 'online',
-                        });
-                        isready = true
-                    })
-                }
-            })
-        } else {
-            console.log(`重大なエラー: VOICEVOXエンジンの呼び出しに失敗しました。ステータスコードは ${response.status} でした。`)
-        }
+    client.application.commands.set(cmddata).then(() => {
+        console.log("Command Ready!");
     })
+    // VOICEVOXエンジンに接続可能か確認する。
+    try {
+        fetch(`http://127.0.0.1:50021/version`, {
+            method: "GET"
+        }).then(response => {
+            if ( response.status == 200 ) {
+                response.text().then(text => {
+                    console.log(`VOICEVOX ENGINE: ${text}`)
+                })
+                // OKだったら、話者情報も取得する
+                client.user.setPresence({
+                    activities: [{ name: `エンジンから情報取得中`, type: ActivityType.Watching }],
+                    status: 'dnd',
+                });
+                fetch(`http://127.0.0.1:50021/speakers`, {
+                    method: "GET"
+                }).then(response => {
+                    if ( response.status === 200 ) {
+                        response.text().then(data => {
+                            speakersdata = JSON.parse(data)
+                            speakersnamearray = speakersdata.map( elem => elem.name )
+                            // isreadyを立ててコマンドの受付を開始する
+                            client.user.setPresence({
+                                activities: [{ name: `READY`, type: ActivityType.Playing }],
+                                status: 'online',
+                            });
+                            isready = true
+                            console.log("VOICEVOX API Ready!");
+                        })
+                    }
+                })
+            } else {
+                client.user.setPresence({
+                    activities: [{ name: `エンジンからの情報取得に失敗`, type: ActivityType.Watching }],
+                    status: 'dnd',
+                });
+                console.log(`重大なエラー: VOICEVOXエンジンの呼び出しに失敗しました。ステータスコードは ${response.status} でした。`)
+            }
+        })
+    } catch (error) {
+        client.user.setPresence({
+            activities: [{ name: `エンジンからの情報取得に失敗`, type: ActivityType.Watching }],
+            status: 'dnd',
+        });
+        console.log(`重大なエラー: VOICEVOXエンジンの呼び出しに失敗しました。:${error}`)
+    }
+    
 });
 
 // num
@@ -83,9 +103,6 @@ let currentchannelid
 
 client.on("interactionCreate", async (interaction) => {
     try {
-        if (!interaction.isCommand()) {
-            return;
-        }
         if (!isready) {
             await interaction.reply('Botは準備中です。もしこれが続いている場合は、Botのオーナーに連絡してください。');
             return;
@@ -133,28 +150,73 @@ client.on("interactionCreate", async (interaction) => {
             }
             await interaction.reply(message);
         } else if (interaction.commandName === 'setvoice') {
-            const select = new StringSelectMenuBuilder()
-                .setCustomId('setvoicepanel')
-                .setPlaceholder('ボイスを選択')
-                .addOptions(
-                    new StringSelectMenuOptionBuilder()
-                        .setLabel('ラベル')
-                        .setDescription('概要')
-                        .setValue('val'),
-                );
-            const row = new ActionRowBuilder()
-                .addComponents(select);
+            /*const row = new ActionRowBuilder()
+                .addComponents(selectspeakersmenu);
             await interaction.reply({
                 content: 'ボイスを選択',
                 components: [row],
                 ephemeral: true
-            });
+            });*/
+            if (speakersnamearray.includes(interaction.options.getString("speakername"))) {
+                const speakerobj = speakersdata.find(elem => elem.name === interaction.options.getString("speakername"))
+                const styleselectarray = []
+                Promise.all(speakerobj.styles.map(elem => {
+                    styleselectarray.push(new StringSelectMenuOptionBuilder()
+                        .setLabel(elem.name)
+                        .setValue(`${elem.id}`)
+                    )
+                })).then(async () => {
+                    const select = new StringSelectMenuBuilder()
+                        .setCustomId('setspeakerid')
+                        .setPlaceholder('わしゃの スタイルは？')
+                        .addOptions(styleselectarray);
+                    const row = new ActionRowBuilder()
+                        .addComponents(select);
+                    await interaction.reply({
+                        content: 'スタイルを選択',
+                        components: [row],
+                        ephemeral: true
+                    })
+                })
+            } else {
+                await interaction.reply({
+                    content: `指定された話者名が見つかりませんでした。\n利用可能な話者は ${speakersnamearray.join(',')}です。 `,
+                    ephemeral: true
+                });
+            }
         } else if (interaction.commandName === 'credit') {
-            let speakersnamearray = speakersdata.map((elem) => elem.name)
             await interaction.reply({
                 content: `VOICEVOX: ${speakersnamearray.join(',')}`,
                 ephemeral: true
             });
+        } else if (interaction.isStringSelectMenu()) {
+            if (interaction.customId === 'setspeakerid') {
+                console.log("SetSpeaker")
+                const memberId = interaction.member.id
+                userdata.get(memberId).then(async data => {
+                    if( data === undefined ) {
+                        let modded_userdata = JSON.parse(JSON.stringify(initial_userdata))
+                        modded_userdata.speakerId = interaction.values[0]
+                        userdata.set(memberId, modded_userdata)
+                        console.log(`New user data registered: ${memberId}`)
+                        await interaction.update({
+                            content: `Great! 新しいユーザーデータを作成して、変更を保存しました。`,
+                            ephemeral: true,
+                            components: []
+                        });
+                    } else {
+                        let modded_userdata = JSON.parse(JSON.stringify(data))
+                        modded_userdata.speakerId = interaction.values[0]
+                        userdata.set(memberId, modded_userdata)
+                        console.log(`User data modified: ${memberId}`)
+                        await interaction.update({
+                            content: `Great! 変更を保存しました。`,
+                            ephemeral: true,
+                            components: []
+                        });
+                    }
+                })
+            }
         } else {
             await interaction.reply('Invalid Command.....');
         }
@@ -164,47 +226,63 @@ client.on("interactionCreate", async (interaction) => {
     }
 });
 
+function getUserData(memberId) {
+    return new Promise((resolve, reject) => {
+        userdata.get(memberId).then(data => {
+            if( data === undefined ) {
+                userdata.set(memberId, initial_userdata)
+                console.log(`New user data registered: ${memberId}`)
+                resolve(initial_userdata)
+            } else {
+                resolve(data)
+            }
+        })
+    })
+}
+
 client.on('messageCreate', message => {
     if (message.author.bot) {
         return;
     }
     if (message.channel.id === currentchannelid) {
-        console.log(`Message in channel!: ${message.content}`)
-        fetch(`http://127.0.0.1:50021/audio_query?text=${message.content}&speaker=61`, {
-            method: "POST"
-        }).then(response => {
-            if (response.status === 200) {
-                response.text().then(text => {
-                    console.log(text)
-                    fetch(`http://127.0.0.1:50021/synthesis?speaker=61`, {
-                        method: "POST",
-                        headers: {"Content-Type": "application/json", "accept": "audio/wav"},
-                        body: text
-                    }).then(response => {
-                        //console.log(response)
-                        if (response.status === 200) {
-                            response.arrayBuffer().then(res => {
-                                const buffer = Buffer.from(res)
-                                fs.writeFile("temp/audio.wav", buffer, (err) => {
-                                    if (err) {
-                                        console.log(`ファイルの書き込みに失敗: ${err}`)
-                                    } else {
-                                        console.log(`ファイルを書き込みました`)
-                                        const resource = createAudioResource("temp/audio.wav");
-                                        player.play(resource);
-                                        console.log(`再生中`)
-                                    }
+        getUserData(message.member.id).then(userdata => {
+            console.log(`Message in channel!: ${message.content} ${userdata.speakerId}`)
+            fetch(`http://127.0.0.1:50021/audio_query?text=${message.content}&speaker=${userdata.speakerId}`, {
+                method: "POST"
+            }).then(response => {
+                if (response.status === 200) {
+                    response.text().then(text => {
+                        console.log(text)
+                        fetch(`http://127.0.0.1:50021/synthesis?speaker=${userdata.speakerId}`, {
+                            method: "POST",
+                            headers: {"Content-Type": "application/json", "accept": "audio/wav"},
+                            body: text
+                        }).then(response => {
+                            //console.log(response)
+                            if (response.status === 200) {
+                                response.arrayBuffer().then(res => {
+                                    const buffer = Buffer.from(res)
+                                    fs.writeFile("temp/audio.wav", buffer, (err) => {
+                                        if (err) {
+                                            console.log(`ファイルの書き込みに失敗: ${err}`)
+                                        } else {
+                                            console.log(`ファイルを書き込みました`)
+                                            const resource = createAudioResource("temp/audio.wav");
+                                            player.play(resource);
+                                            console.log(`再生中`)
+                                        }
+                                    })
                                 })
-                            })
-                        } else {
-                            console.log(`VOICEVOXの呼び出しに失敗: ${response.status}`)
-                            response.text().then(res => {
-                                console.log(res)
-                            })
-                        }
+                            } else {
+                                console.log(`VOICEVOXの呼び出しに失敗: ${response.status}`)
+                                response.text().then(res => {
+                                    console.log(res)
+                                })
+                            }
+                        })
                     })
-                })
-            }
+                }
+            })
         })
     }
     //console.log(`Message coming: ${message.content}`)
