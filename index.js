@@ -67,6 +67,24 @@ client.once("ready", async () => {
         ],
     },
     {
+        name: "addtopersonaldict",
+        description: "個人簡易辞書にルールを追加します。",
+        options: [
+            {
+                type: ApplicationCommandOptionType.String,
+                name: "dictreplacefrom",
+                description: "変換元ワード",
+                required: true
+            },
+            {
+                type: ApplicationCommandOptionType.String,
+                name: "dictreplaceto",
+                description: "変換先ワード(カタカナ読みなど)",
+                required: true
+            }
+        ],
+    },
+    {
         name: "credit",
         description: "クレジットを表示します。"
     }];
@@ -123,7 +141,8 @@ client.once("ready", async () => {
 });
 
 // num
-let currentchannelid
+let currenttextchannelid
+let currentvoicechannelid
 
 client.on("interactionCreate", async (interaction) => {
     try {
@@ -141,9 +160,10 @@ client.on("interactionCreate", async (interaction) => {
             if (!memberVC || !memberVC.joinable || !memberVC.speakable) {
                 console.log("Voice connection check failed")
                 message = "ボイスチャンネルに接続できませんでした。ボイスチャンネルに参加しているか、またBotがチャンネルへの接続/発言権限を持っているかを確認してください。"
-            } else {
+            } else if ( !interaction.guild.members.me.voice.channel ) {
                 console.log(interaction.channel)
-                currentchannelid = interaction.channel.id
+                currenttextchannelid = interaction.channel.id
+                currentvoicechannelid = memberVC.id
                 const connection = joinVoiceChannel({
                     guildId: guild.id,
                     channelId: memberVC.id,
@@ -154,6 +174,8 @@ client.on("interactionCreate", async (interaction) => {
                 connection.subscribe(player);
                 message = "参加したよ～。"
                 speakqueuearray = []
+            } else {
+                message = "すでにボイスチャンネルに参加しているようです。"
             }
             await interaction.reply(message);
         } else if (interaction.commandName === 'leave') {
@@ -168,7 +190,8 @@ client.on("interactionCreate", async (interaction) => {
                 const connection = getVoiceConnection(memberVC.guild.id);
                 //console.log(connection)
                 if (connection !== undefined) {
-                    currentchannelid = null
+                    currenttextchannelid = null
+                    currentvoicechannelid = null
                     connection.destroy();
                     message = "退出しました"
                 }
@@ -256,6 +279,29 @@ client.on("interactionCreate", async (interaction) => {
                     });
                 }
             })
+        } else if (interaction.commandName === 'addtopersonaldict') {
+            const memberId = interaction.member.id
+            userdata.get(memberId).then(async data => {
+                if( data === undefined ) {
+                    let modded_userdata = JSON.parse(JSON.stringify(initial_userdata))
+                    modded_userdata.personalDict.push({ from: interaction.options.getString("dictreplacefrom"), to: interaction.options.getString("dictreplaceto") })
+                    userdata.set(memberId, modded_userdata)
+                    console.log(`New user data registered: ${memberId}`)
+                    await interaction.reply({
+                        content: `Great! 新しいユーザーデータを作成して、変更を保存しました。`,
+                        ephemeral: true
+                    });
+                } else {
+                    let modded_userdata = JSON.parse(JSON.stringify(data))
+                    modded_userdata.personalDict.push({ from: interaction.options.getString("dictreplacefrom"), to: interaction.options.getString("dictreplaceto") })
+                    userdata.set(memberId, modded_userdata)
+                    console.log(`User data modified: ${memberId}`)
+                    await interaction.reply({
+                        content: `Great! 変更を保存しました。`,
+                        ephemeral: true
+                    });
+                }
+            })
         } else if (interaction.isStringSelectMenu()) {
             if (interaction.customId === 'setspeakerid') {
                 const memberId = interaction.member.id
@@ -311,46 +357,50 @@ function playMessage(obj) {
         const speed = userdata.speedScale ?? 1.0
         const pitch = userdata.pitchScale ?? 0.0
         const intonation = userdata.intonationScale ?? 1.0
+        const dict = userdata.personalDict ?? []
+        let content = obj.content
         console.log(`Message in channel!: ${obj.content} ${userdata.speakerId} ${speed} ${pitch} ${intonation}`)
-        fetch(`http://${voicevox_host}/audio_query?text=${obj.content}&speaker=${userdata.speakerId}`, {
-            method: "POST"
-        }).then(response => {
-            if (response.status === 200) {
-                response.text().then(text => {
-                    const parsedquery = JSON.parse(text)
-                    parsedquery.speedScale = speed
-                    parsedquery.pitchScale = pitch
-                    parsedquery.intonationScale = intonation
-                    console.log(parsedquery)
-                    fetch(`http://${voicevox_host}/synthesis?speaker=${userdata.speakerId}`, {
-                        method: "POST",
-                        headers: {"Content-Type": "application/json", "accept": "audio/wav"},
-                        body: JSON.stringify(parsedquery)
-                    }).then(response => {
-                        //console.log(response)
-                        if (response.status === 200) {
-                            response.arrayBuffer().then(res => {
-                                const buffer = Buffer.from(res)
-                                fs.writeFile("temp/audio.wav", buffer, (err) => {
-                                    if (err) {
-                                        console.log(`ファイルの書き込みに失敗: ${err}`)
-                                    } else {
-                                        console.log(`ファイルを書き込みました`)
-                                        const resource = createAudioResource("temp/audio.wav");
-                                        player.play(resource);
-                                        console.log(`再生中`)
-                                    }
+        Promise.all(dict.map(async elem => { content = content.replaceAll(elem.from, elem.to, "g")})).then(() => {
+            fetch(`http://${voicevox_host}/audio_query?text=${content}&speaker=${userdata.speakerId}`, {
+                method: "POST"
+            }).then(response => {
+                if (response.status === 200) {
+                    response.text().then(text => {
+                        const parsedquery = JSON.parse(text)
+                        parsedquery.speedScale = speed
+                        parsedquery.pitchScale = pitch
+                        parsedquery.intonationScale = intonation
+                        console.log(parsedquery)
+                        fetch(`http://${voicevox_host}/synthesis?speaker=${userdata.speakerId}`, {
+                            method: "POST",
+                            headers: {"Content-Type": "application/json", "accept": "audio/wav"},
+                            body: JSON.stringify(parsedquery)
+                        }).then(response => {
+                            //console.log(response)
+                            if (response.status === 200) {
+                                response.arrayBuffer().then(res => {
+                                    const buffer = Buffer.from(res)
+                                    fs.writeFile("temp/audio.wav", buffer, (err) => {
+                                        if (err) {
+                                            console.log(`ファイルの書き込みに失敗: ${err}`)
+                                        } else {
+                                            console.log(`ファイルを書き込みました`)
+                                            const resource = createAudioResource("temp/audio.wav");
+                                            player.play(resource);
+                                            console.log(`再生中`)
+                                        }
+                                    })
                                 })
-                            })
-                        } else {
-                            console.log(`VOICEVOXの呼び出しに失敗: ${response.status}`)
-                            response.text().then(res => {
-                                console.log(res)
-                            })
-                        }
+                            } else {
+                                console.log(`VOICEVOXの呼び出しに失敗: ${response.status}`)
+                                response.text().then(res => {
+                                    console.log(res)
+                                })
+                            }
+                        })
                     })
-                })
-            }
+                }
+            })
         })
     })
 }
@@ -359,7 +409,7 @@ client.on('messageCreate', message => {
     if (message.author.bot) {
         return;
     }
-    if (message.channel.id === currentchannelid) {
+    if (message.channel.id === currenttextchannelid) {
         if (player.state.status === AudioPlayerStatus.Idle) {
             playMessage({ content: message.content, memberId: message.member.id })
         } else {
@@ -369,12 +419,37 @@ client.on('messageCreate', message => {
     //console.log(`Message coming: ${message.content}`)
 });
 
+client.on('voiceStateUpdate', (oldstate, newstate) => {
+    if (oldstate.channelId === newstate.channelId) {
+        return;
+    }
+    if (oldstate.channelId === null && newstate.channelId !== null) {
+        console.log("It's all connected!")
+        console.log(newstate.channel.members.size)
+    } else if (oldstate.channelId !== null && newstate.channelId === null) {
+        console.log("It's all disconnected!")
+        if (oldstate.channel.members.size < 2 && oldstate.channelId === currentvoicechannelid) {
+            const connection = getVoiceConnection(oldstate.guild.id);
+            //console.log(connection)
+            if (connection !== undefined) {
+                const textch = client.channels.cache.get(currenttextchannelid)
+                if (textch) {
+                    textch.send("誰もいなくなったため、退出しました")
+                }
+                connection.destroy();
+                currenttextchannelid = null
+                currentvoicechannelid = null
+            }
+
+        }
+    }
+});
+
 player.on(AudioPlayerStatus.Idle, () => {
     if (speakqueuearray.length > 0) {
         playMessage(speakqueuearray[0])
         speakqueuearray.shift()
     }
-	//player.play(getNextResource());
 });
 
 client.login(bot_token);
