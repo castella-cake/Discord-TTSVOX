@@ -1,6 +1,6 @@
 const { Client, GatewayIntentBits, Partials, ChannelType, ApplicationCommandOptionType, ActivityType, ActionRowBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, InteractionType } = require('discord.js');
 const { joinVoiceChannel, getVoiceConnection, createAudioPlayer, createAudioResource } = require('@discordjs/voice');
-const { bot_token, initial_userdata } = require('./config.json');
+const { bot_token, initial_userdata, voicevox_host } = require('./config.json');
 const fs = require("fs");
 const Keyv = require('keyv')
 const userdata = new Keyv('sqlite://db.sqlite', { table: 'userobj' })
@@ -43,6 +43,29 @@ client.once("ready", async () => {
         }],
     },
     {
+        name: "setvoiceoption",
+        description: "ボイスの話速などを変更します。",
+        options: [
+            {
+                type: ApplicationCommandOptionType.String,
+                name: "voiceoption",
+                description: "オプションを選択",
+                required: true,
+                choices: [
+                    { name: "話速", value: "speedScale" },
+                    { name: "ピッチ", value: "pitchScale" },
+                    { name: "抑揚", value: "intonationScale" }
+                ]
+            },
+            {
+                type: ApplicationCommandOptionType.Number,
+                name: "optionvalue",
+                description: "値を入力(話速 / 抑揚は0.5~2.0 ピッチは-0.15~0.15)",
+                required: true
+            }
+        ],
+    },
+    {
         name: "credit",
         description: "クレジットを表示します。"
     }];
@@ -51,7 +74,7 @@ client.once("ready", async () => {
     })
     // VOICEVOXエンジンに接続可能か確認する。
     try {
-        fetch(`http://127.0.0.1:50021/version`, {
+        fetch(`http://${voicevox_host}/version`, {
             method: "GET"
         }).then(response => {
             if ( response.status == 200 ) {
@@ -63,7 +86,7 @@ client.once("ready", async () => {
                     activities: [{ name: `エンジンから情報取得中`, type: ActivityType.Watching }],
                     status: 'dnd',
                 });
-                fetch(`http://127.0.0.1:50021/speakers`, {
+                fetch(`http://${voicevox_host}/speakers`, {
                     method: "GET"
                 }).then(response => {
                     if ( response.status === 200 ) {
@@ -189,9 +212,50 @@ client.on("interactionCreate", async (interaction) => {
                 content: `VOICEVOX: ${speakersnamearray.join(',')}`,
                 ephemeral: true
             });
+        } else if (interaction.commandName === 'setvoiceoption') {
+            const memberId = interaction.member.id
+            if (interaction.options.getString("voiceoption") === "speedScale" && ( interaction.options.getNumber("optionvalue") > 2.0 || interaction.options.getNumber("optionvalue") < 0.5 )) {
+                await interaction.reply({
+                    content: `話速は0.5~2.0以内で指定する必要があります。`,
+                    ephemeral: true,
+                });
+                return;
+            } else if (interaction.options.getString("voiceoption") === "pitchScale" && ( interaction.options.getNumber("optionvalue") > 0.15 || interaction.options.getNumber("optionvalue") < -0.15 )) {
+                await interaction.reply({
+                    content: `ピッチは-0.15~0.15以内で指定する必要があります。`,
+                    ephemeral: true,
+                });
+                return;
+            } else if (interaction.options.getString("voiceoption") === "intonationScale" && ( interaction.options.getNumber("optionvalue") > 2.0 || interaction.options.getNumber("optionvalue") < 0.5 )) {
+                await interaction.reply({
+                    content: `抑揚は0.5~2.0以内で指定する必要があります。`,
+                    ephemeral: true,
+                });
+                return;
+            }
+            userdata.get(memberId).then(async data => {
+                if( data === undefined ) {
+                    let modded_userdata = JSON.parse(JSON.stringify(initial_userdata))
+                    modded_userdata[interaction.options.getString("voiceoption")] = interaction.options.getNumber("optionvalue")
+                    userdata.set(memberId, modded_userdata)
+                    console.log(`New user data registered: ${memberId}`)
+                    await interaction.reply({
+                        content: `Great! 新しいユーザーデータを作成して、変更を保存しました。`,
+                        ephemeral: true
+                    });
+                } else {
+                    let modded_userdata = JSON.parse(JSON.stringify(data))
+                    modded_userdata[interaction.options.getString("voiceoption")] = interaction.options.getNumber("optionvalue")
+                    userdata.set(memberId, modded_userdata)
+                    console.log(`User data modified: ${memberId}`)
+                    await interaction.reply({
+                        content: `Great! 変更を保存しました。`,
+                        ephemeral: true
+                    });
+                }
+            })
         } else if (interaction.isStringSelectMenu()) {
             if (interaction.customId === 'setspeakerid') {
-                console.log("SetSpeaker")
                 const memberId = interaction.member.id
                 userdata.get(memberId).then(async data => {
                     if( data === undefined ) {
@@ -246,17 +310,24 @@ client.on('messageCreate', message => {
     }
     if (message.channel.id === currentchannelid) {
         getUserData(message.member.id).then(userdata => {
-            console.log(`Message in channel!: ${message.content} ${userdata.speakerId}`)
-            fetch(`http://127.0.0.1:50021/audio_query?text=${message.content}&speaker=${userdata.speakerId}`, {
+            const speed = userdata.speedScale ?? 1.0
+            const pitch = userdata.pitchScale ?? 0.0
+            const intonation = userdata.intonationScale ?? 1.0
+            console.log(`Message in channel!: ${message.content} ${userdata.speakerId} ${speed} ${pitch} ${intonation}`)
+            fetch(`http://${voicevox_host}/audio_query?text=${message.content}&speaker=${userdata.speakerId}`, {
                 method: "POST"
             }).then(response => {
                 if (response.status === 200) {
                     response.text().then(text => {
-                        console.log(text)
-                        fetch(`http://127.0.0.1:50021/synthesis?speaker=${userdata.speakerId}`, {
+                        const parsedquery = JSON.parse(text)
+                        parsedquery.speedScale = speed
+                        parsedquery.pitchScale = pitch
+                        parsedquery.intonationScale = intonation
+                        console.log(parsedquery)
+                        fetch(`http://${voicevox_host}/synthesis?speaker=${userdata.speakerId}`, {
                             method: "POST",
                             headers: {"Content-Type": "application/json", "accept": "audio/wav"},
-                            body: text
+                            body: JSON.stringify(parsedquery)
                         }).then(response => {
                             //console.log(response)
                             if (response.status === 200) {
@@ -286,6 +357,10 @@ client.on('messageCreate', message => {
         })
     }
     //console.log(`Message coming: ${message.content}`)
+});
+
+player.on(AudioPlayerStatus.Idle, () => {
+	//player.play(getNextResource());
 });
 
 client.login(bot_token);
