@@ -1,5 +1,5 @@
 const { Client, GatewayIntentBits, Partials, ChannelType, ApplicationCommandOptionType, ActivityType, ActionRowBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, InteractionType } = require('discord.js');
-const { joinVoiceChannel, getVoiceConnection, createAudioPlayer, createAudioResource } = require('@discordjs/voice');
+const { joinVoiceChannel, getVoiceConnection, createAudioPlayer, createAudioResource, AudioPlayerStatus } = require('@discordjs/voice');
 const { bot_token, initial_userdata, voicevox_host } = require('./config.json');
 const fs = require("fs");
 const Keyv = require('keyv')
@@ -13,6 +13,7 @@ let isready = false
 let speakersdata = []
 const player = createAudioPlayer();
 let speakersnamearray = []
+let speakqueuearray = []
 
 client.once("ready", async () => {
     client.user.setPresence({
@@ -152,6 +153,7 @@ client.on("interactionCreate", async (interaction) => {
                 });
                 connection.subscribe(player);
                 message = "参加したよ～。"
+                speakqueuearray = []
             }
             await interaction.reply(message);
         } else if (interaction.commandName === 'leave') {
@@ -304,62 +306,74 @@ function getUserData(memberId) {
     })
 }
 
+function playMessage(obj) {
+    getUserData(obj.memberId).then(userdata => {
+        const speed = userdata.speedScale ?? 1.0
+        const pitch = userdata.pitchScale ?? 0.0
+        const intonation = userdata.intonationScale ?? 1.0
+        console.log(`Message in channel!: ${obj.content} ${userdata.speakerId} ${speed} ${pitch} ${intonation}`)
+        fetch(`http://${voicevox_host}/audio_query?text=${obj.content}&speaker=${userdata.speakerId}`, {
+            method: "POST"
+        }).then(response => {
+            if (response.status === 200) {
+                response.text().then(text => {
+                    const parsedquery = JSON.parse(text)
+                    parsedquery.speedScale = speed
+                    parsedquery.pitchScale = pitch
+                    parsedquery.intonationScale = intonation
+                    console.log(parsedquery)
+                    fetch(`http://${voicevox_host}/synthesis?speaker=${userdata.speakerId}`, {
+                        method: "POST",
+                        headers: {"Content-Type": "application/json", "accept": "audio/wav"},
+                        body: JSON.stringify(parsedquery)
+                    }).then(response => {
+                        //console.log(response)
+                        if (response.status === 200) {
+                            response.arrayBuffer().then(res => {
+                                const buffer = Buffer.from(res)
+                                fs.writeFile("temp/audio.wav", buffer, (err) => {
+                                    if (err) {
+                                        console.log(`ファイルの書き込みに失敗: ${err}`)
+                                    } else {
+                                        console.log(`ファイルを書き込みました`)
+                                        const resource = createAudioResource("temp/audio.wav");
+                                        player.play(resource);
+                                        console.log(`再生中`)
+                                    }
+                                })
+                            })
+                        } else {
+                            console.log(`VOICEVOXの呼び出しに失敗: ${response.status}`)
+                            response.text().then(res => {
+                                console.log(res)
+                            })
+                        }
+                    })
+                })
+            }
+        })
+    })
+}
+
 client.on('messageCreate', message => {
     if (message.author.bot) {
         return;
     }
     if (message.channel.id === currentchannelid) {
-        getUserData(message.member.id).then(userdata => {
-            const speed = userdata.speedScale ?? 1.0
-            const pitch = userdata.pitchScale ?? 0.0
-            const intonation = userdata.intonationScale ?? 1.0
-            console.log(`Message in channel!: ${message.content} ${userdata.speakerId} ${speed} ${pitch} ${intonation}`)
-            fetch(`http://${voicevox_host}/audio_query?text=${message.content}&speaker=${userdata.speakerId}`, {
-                method: "POST"
-            }).then(response => {
-                if (response.status === 200) {
-                    response.text().then(text => {
-                        const parsedquery = JSON.parse(text)
-                        parsedquery.speedScale = speed
-                        parsedquery.pitchScale = pitch
-                        parsedquery.intonationScale = intonation
-                        console.log(parsedquery)
-                        fetch(`http://${voicevox_host}/synthesis?speaker=${userdata.speakerId}`, {
-                            method: "POST",
-                            headers: {"Content-Type": "application/json", "accept": "audio/wav"},
-                            body: JSON.stringify(parsedquery)
-                        }).then(response => {
-                            //console.log(response)
-                            if (response.status === 200) {
-                                response.arrayBuffer().then(res => {
-                                    const buffer = Buffer.from(res)
-                                    fs.writeFile("temp/audio.wav", buffer, (err) => {
-                                        if (err) {
-                                            console.log(`ファイルの書き込みに失敗: ${err}`)
-                                        } else {
-                                            console.log(`ファイルを書き込みました`)
-                                            const resource = createAudioResource("temp/audio.wav");
-                                            player.play(resource);
-                                            console.log(`再生中`)
-                                        }
-                                    })
-                                })
-                            } else {
-                                console.log(`VOICEVOXの呼び出しに失敗: ${response.status}`)
-                                response.text().then(res => {
-                                    console.log(res)
-                                })
-                            }
-                        })
-                    })
-                }
-            })
-        })
+        if (player.state.status === AudioPlayerStatus.Idle) {
+            playMessage({ content: message.content, memberId: message.member.id })
+        } else {
+            speakqueuearray.push({ content: message.content, memberId: message.member.id })
+        }
     }
     //console.log(`Message coming: ${message.content}`)
 });
 
 player.on(AudioPlayerStatus.Idle, () => {
+    if (speakqueuearray.length > 0) {
+        playMessage(speakqueuearray[0])
+        speakqueuearray.shift()
+    }
 	//player.play(getNextResource());
 });
 
