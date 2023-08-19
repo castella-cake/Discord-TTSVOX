@@ -1,9 +1,11 @@
 const { Client, GatewayIntentBits, Partials, ChannelType, ApplicationCommandOptionType, ActivityType, ActionRowBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, InteractionType } = require('discord.js');
 const { joinVoiceChannel, getVoiceConnection, createAudioPlayer, createAudioResource, AudioPlayerStatus } = require('@discordjs/voice');
-const { bot_token, initial_userdata, voicevox_host } = require('./config.json');
+const { bot_token, initial_userdata, voicevox_host, database_host, initial_serverdata, fastforwardqueue, fastforwardspeed } = require('./config.json');
+const { cmdArray } = require('./modules/cmdarray.js');
 const fs = require("fs");
 const Keyv = require('keyv')
-const userdata = new Keyv('sqlite://db.sqlite', { table: 'userobj' })
+const userdata = new Keyv(database_host, { table: 'userobj' })
+const serverdata = new Keyv(database_host, { table: 'serverobj' })
 
 const client = new Client({ intents: [ GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates, GatewayIntentBits.GuildMessages, GatewayIntentBits.GuildMembers, GatewayIntentBits.MessageContent ], partials: [Partials.Channel] });
 
@@ -21,74 +23,7 @@ client.once("ready", async () => {
         status: 'dnd',
     });
     // スラッシュコマンドを作成する
-    const cmddata = [{
-        name: "ping",
-        description: "Replies with Pong!",
-    },
-    {
-        name: "leave",
-        description: "退出します"
-    },
-    {
-        name: "join",
-        description: "実行者がいるボイスチャンネルに参加します。"
-    },
-    {
-        name: "setvoice",
-        description: "話者を変更します。実行すると、スタイルの選択パネルが表示されます。設定はあなた以外には見えません。",
-        options: [{
-            type: ApplicationCommandOptionType.String,
-            name: "speakername",
-            description: "話者名を入力",
-            required: true
-        }],
-    },
-    {
-        name: "setvoiceoption",
-        description: "ボイスの話速などを変更します。",
-        options: [
-            {
-                type: ApplicationCommandOptionType.String,
-                name: "voiceoption",
-                description: "オプションを選択",
-                required: true,
-                choices: [
-                    { name: "話速", value: "speedScale" },
-                    { name: "ピッチ", value: "pitchScale" },
-                    { name: "抑揚", value: "intonationScale" }
-                ]
-            },
-            {
-                type: ApplicationCommandOptionType.Number,
-                name: "optionvalue",
-                description: "値を入力(話速 / 抑揚は0.5~2.0 ピッチは-0.15~0.15)",
-                required: true
-            }
-        ],
-    },
-    {
-        name: "addtopersonaldict",
-        description: "個人簡易辞書にルールを追加します。",
-        options: [
-            {
-                type: ApplicationCommandOptionType.String,
-                name: "dictreplacefrom",
-                description: "変換元ワード",
-                required: true
-            },
-            {
-                type: ApplicationCommandOptionType.String,
-                name: "dictreplaceto",
-                description: "変換先ワード(カタカナ読みなど)",
-                required: true
-            }
-        ],
-    },
-    {
-        name: "credit",
-        description: "クレジットを表示します。"
-    }];
-    client.application.commands.set(cmddata).then(() => {
+    client.application.commands.set(cmdArray).then(() => {
         console.log("Command Ready!");
     })
     // VOICEVOXエンジンに接続可能か確認する。
@@ -279,29 +214,158 @@ client.on("interactionCreate", async (interaction) => {
                     });
                 }
             })
-        } else if (interaction.commandName === 'addtopersonaldict') {
-            const memberId = interaction.member.id
-            userdata.get(memberId).then(async data => {
-                if( data === undefined ) {
-                    let modded_userdata = JSON.parse(JSON.stringify(initial_userdata))
-                    modded_userdata.personalDict.push({ from: interaction.options.getString("dictreplacefrom"), to: interaction.options.getString("dictreplaceto") })
-                    userdata.set(memberId, modded_userdata)
-                    console.log(`New user data registered: ${memberId}`)
-                    await interaction.reply({
-                        content: `Great! 新しいユーザーデータを作成して、変更を保存しました。`,
-                        ephemeral: true
-                    });
-                } else {
-                    let modded_userdata = JSON.parse(JSON.stringify(data))
-                    modded_userdata.personalDict.push({ from: interaction.options.getString("dictreplacefrom"), to: interaction.options.getString("dictreplaceto") })
-                    userdata.set(memberId, modded_userdata)
-                    console.log(`User data modified: ${memberId}`)
-                    await interaction.reply({
-                        content: `Great! 変更を保存しました。`,
-                        ephemeral: true
-                    });
-                }
-            })
+        // TODO: この辺はfunctionにまとめて、できる限り複製されたコードをなくす
+        } else if (interaction.commandName === 'addtodict') {
+            if (interaction.options.getString("controldict") == "server" ) {
+                // このインタラクションをしたギルドIDを取得
+                const guildId = interaction.guild.id
+                // ユーザーデータのテーブルからギルドID名の行を取得
+                serverdata.get(guildId).then(async data => {
+                    // undefinedなら初期サーバーデータ引っ張ってきてpushする,そうじゃないならサーバーデータ引っ張ってきてpushする
+                    if( data === undefined ) {
+                        let modded_guilddata = JSON.parse(JSON.stringify(initial_serverdata))
+                        modded_guilddata.serverDict.push({ from: interaction.options.getString("dictreplacefrom"), to: interaction.options.getString("dictreplaceto") })
+                        serverdata.set(guildId, modded_guilddata)
+                        console.log(`New server data registered: ${guildId}`)
+                        await interaction.reply({
+                            content: `Great! 新しいサーバーデータを作成して、変更を保存しました。`,
+                            ephemeral: true
+                        });
+                    } else {
+                        let modded_guilddata = JSON.parse(JSON.stringify(initial_serverdata))
+                        modded_guilddata.serverDict.push({ from: interaction.options.getString("dictreplacefrom"), to: interaction.options.getString("dictreplaceto") })
+                        serverdata.set(guildId, modded_guilddata)
+                        console.log(`Server data modified: ${guildId}`)
+                        await interaction.reply({
+                            content: `Great! サーバーに変更を保存しました。`,
+                            ephemeral: true
+                        });
+                    }
+                })
+            } else {
+                // このインタラクションをしたメンバーIDを取得
+                const memberId = interaction.member.id
+                // ユーザーデータのテーブルからメンバーID名の行を取得
+                userdata.get(memberId).then(async data => {
+                    if( data === undefined ) {
+                        let modded_userdata = JSON.parse(JSON.stringify(initial_userdata))
+                        modded_userdata.personalDict.push({ from: interaction.options.getString("dictreplacefrom"), to: interaction.options.getString("dictreplaceto") })
+                        userdata.set(memberId, modded_userdata)
+                        console.log(`New user data registered: ${memberId}`)
+                        await interaction.reply({
+                            content: `Great! 新しいユーザーデータを作成して、変更を保存しました。`,
+                            ephemeral: true
+                        });
+                    } else {
+                        let modded_userdata = JSON.parse(JSON.stringify(data))
+                        modded_userdata.personalDict.push({ from: interaction.options.getString("dictreplacefrom"), to: interaction.options.getString("dictreplaceto") })
+                        userdata.set(memberId, modded_userdata)
+                        console.log(`User data modified: ${memberId}`)
+                        await interaction.reply({
+                            content: `Great! 変更を保存しました。`,
+                            ephemeral: true
+                        });
+                    }
+                })
+            }
+        } else if (interaction.commandName === 'removefromdict') {
+            if (interaction.options.getString("controldict") == "server" ) {
+                // このインタラクションをしたギルドIDを取得
+                const guildId = interaction.guild.id
+                // ユーザーデータのテーブルからギルドID名の行を取得
+                serverdata.get(guildId).then(async data => {
+                    // undefinedなら初期サーバーデータ引っ張ってきてpushする,そうじゃないならサーバーデータ引っ張ってきてpushする
+                    if( data === undefined ) {
+                        let modded_guilddata = JSON.parse(JSON.stringify(initial_serverdata))
+                        // 「お前消す」なワードのobjを探す
+                        const dictobj = modded_guilddata.serverDict.find(elem => elem.from === interaction.options.getString("deleteword"))
+                        if ( dictobj != undefined ) {
+                            // さっき探したやつでfilter
+                            modded_guilddata.serverDict = modded_guilddata.serverDict.filter(elem => elem !== dictobj)
+                            serverdata.set(guildId, modded_guilddata)
+                            console.log(`New server data registered: ${guildId}`)
+                            await interaction.reply({
+                                content: `Great! 新しいサーバーデータを作成して、変更を保存しました。`,
+                                ephemeral: true
+                            });
+                        } else {
+                            await interaction.reply({
+                                content: `指定されたワードが見つかりませんでした。`,
+                                ephemeral: true
+                            });
+                        }
+                    } else {
+                        let modded_guilddata = JSON.parse(JSON.stringify(data))
+                        // 「お前消す」なワードのobjを探す
+                        const dictobj = modded_guilddata.serverDict.find(elem => elem.from === interaction.options.getString("deleteword"))
+                        console.log(dictobj)
+                        if ( dictobj != undefined ) {
+                            // さっき探したやつでfilter
+                            modded_guilddata.serverDict = modded_guilddata.serverDict.filter(elem => elem !== dictobj)
+                            serverdata.set(guildId, modded_guilddata)
+                            console.log(`Server data modified: ${guildId}`)
+                            await interaction.reply({
+                                content: `Great! サーバーに変更を保存しました。`,
+                                ephemeral: true
+                            });
+                        } else {
+                            await interaction.reply({
+                                content: `指定されたワードが見つかりませんでした。`,
+                                ephemeral: true
+                            });
+                        }
+                    }
+                })
+            } else {
+                // このインタラクションをしたメンバーIDを取得
+                const memberId = interaction.member.id
+                // ユーザーデータのテーブルからメンバーID名の行を取得
+                userdata.get(memberId).then(async data => {
+                    // undefinedなら初期サーバーデータ引っ張ってきてpushする,そうじゃないならサーバーデータ引っ張ってきてpushする
+                    if( data === undefined ) {
+                        // 値渡し
+                        let modded_userdata = JSON.parse(JSON.stringify(initial_userdata))
+                        // 「お前消す」なワードのobjを探す
+                        const dictobj = modded_userdata.personalDict.find(elem => elem.from === interaction.options.getString("deleteword"))
+                        if ( dictobj != undefined ) {
+                            // さっき探したやつでfilter
+                            modded_userdata.personalDict = modded_userdata.personalDict.filter(elem => elem !== dictobj)
+                            userdata.set(memberId, modded_userdata)
+                            console.log(`New user data registered: ${memberId}`)
+                            await interaction.reply({
+                                content: `Great! 新しいユーザーデータを作成して、変更を保存しました。`,
+                                ephemeral: true
+                            });
+                        } else {
+                            await interaction.reply({
+                                content: `指定されたワードが見つかりませんでした。`,
+                                ephemeral: true
+                            });
+                        }
+                    } else {
+                        // 値渡し
+                        let modded_userdata = JSON.parse(JSON.stringify(data))
+                        // 「お前消す」なワードのobjを探す
+                        const dictobj = modded_userdata.personalDict.find(elem => elem.from === interaction.options.getString("deleteword"))
+                        console.log(dictobj)
+                        if ( dictobj != undefined ) {
+                            // さっき探したやつでfilter
+                            modded_userdata.personalDict = modded_userdata.personalDict.filter(elem => elem !== dictobj)
+                            userdata.set(memberId, modded_userdata)
+                            console.log(`User data modified: ${memberId}`)
+                            await interaction.reply({
+                                content: `Great! 変更を保存しました。`,
+                                ephemeral: true
+                            });
+                        } else {
+                            await interaction.reply({
+                                content: `指定されたワードが見つかりませんでした。`,
+                                ephemeral: true
+                            });
+                        }
+                    }
+                })
+            }
         } else if (interaction.isStringSelectMenu()) {
             if (interaction.customId === 'setspeakerid') {
                 const memberId = interaction.member.id
@@ -352,15 +416,36 @@ function getUserData(memberId) {
     })
 }
 
+function getServerData(guildId) {
+    return new Promise((resolve, reject) => {
+        serverdata.get(guildId).then(data => {
+            if( data === undefined ) {
+                serverdata.set(guildId, initial_serverdata)
+                console.log(`New server data registered: ${guildId}`)
+                resolve(initial_serverdata)
+            } else {
+                resolve(data)
+            }
+        })
+    })
+}
+
 function playMessage(obj) {
-    getUserData(obj.memberId).then(userdata => {
-        const speed = userdata.speedScale ?? 1.0
+    Promise.all([ getUserData(obj.memberId), getServerData(obj.guildId) ]).then(dataarray => {
+        const userdata = dataarray[0]
+        const serverdata = dataarray[1]
+        let speed = dataarray.speedScale ?? 1.0
         const pitch = userdata.pitchScale ?? 0.0
         const intonation = userdata.intonationScale ?? 1.0
         const dict = userdata.personalDict ?? []
-        let content = obj.content
+        const serverdict = serverdata.serverDict ?? []
+        if (speakqueuearray.length >= fastforwardqueue) {
+            speed = fastforwardspeed
+        }
+        
+        let content = obj.content.toLowerCase()
         console.log(`Message in channel!: ${obj.content} ${userdata.speakerId} ${speed} ${pitch} ${intonation}`)
-        Promise.all(dict.map(async elem => { content = content.replaceAll(elem.from, elem.to, "g")})).then(() => {
+        Promise.all([ dict.map(async elem => { content = content.replaceAll(elem.from.toLowerCase(), elem.to)}), serverdict.map(async elem => { content = content.replaceAll(elem.from.toLowerCase(), elem.to)}) ]).then(() => {
             fetch(`http://${voicevox_host}/audio_query?text=${content}&speaker=${userdata.speakerId}`, {
                 method: "POST"
             }).then(response => {
@@ -411,9 +496,9 @@ client.on('messageCreate', message => {
     }
     if (message.channel.id === currenttextchannelid) {
         if (player.state.status === AudioPlayerStatus.Idle) {
-            playMessage({ content: message.content, memberId: message.member.id })
+            playMessage({ content: message.content, memberId: message.member.id, guildId: message.guild.id })
         } else {
-            speakqueuearray.push({ content: message.content, memberId: message.member.id })
+            speakqueuearray.push({ content: message.content, memberId: message.member.id, guildId: message.guild.id  })
         }
     }
     //console.log(`Message coming: ${message.content}`)
@@ -440,7 +525,6 @@ client.on('voiceStateUpdate', (oldstate, newstate) => {
                 currenttextchannelid = null
                 currentvoicechannelid = null
             }
-
         }
     }
 });
