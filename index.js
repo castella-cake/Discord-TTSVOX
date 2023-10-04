@@ -2,8 +2,11 @@ const { Client, GatewayIntentBits, Partials, ChannelType, ApplicationCommandOpti
 const { joinVoiceChannel, getVoiceConnection, createAudioPlayer, createAudioResource, AudioPlayerStatus } = require('@discordjs/voice');
 const { bot_token, initial_userdata, voicevox_host, database_host, initial_serverdata, fastforwardqueue, fastforwardspeed } = require('./config.json');
 const { cmdArray } = require('./modules/cmdarray.js');
+const { synthesisRequest } = require('./modules/synthesis.js')
+const { getUserData, setUserData, getServerData, setServerData } = require('./modules/dbcontrol.js')
 const fs = require("fs");
-const Keyv = require('keyv')
+const Keyv = require('keyv');
+const { parse } = require('path');
 const userdata = new Keyv(database_host, { table: 'userobj' })
 const serverdata = new Keyv(database_host, { table: 'serverobj' })
 
@@ -193,79 +196,47 @@ client.on("interactionCreate", async (interaction) => {
                 });
                 return;
             }
-            userdata.get(memberId).then(async data => {
-                if( data === undefined ) {
-                    let modded_userdata = JSON.parse(JSON.stringify(initial_userdata))
-                    modded_userdata[interaction.options.getString("voiceoption")] = interaction.options.getNumber("optionvalue")
-                    userdata.set(memberId, modded_userdata)
-                    console.log(`New user data registered: ${memberId}`)
-                    await interaction.reply({
-                        content: `Great! 新しいユーザーデータを作成して、変更を保存しました。`,
-                        ephemeral: true
-                    });
-                } else {
-                    let modded_userdata = JSON.parse(JSON.stringify(data))
-                    modded_userdata[interaction.options.getString("voiceoption")] = interaction.options.getNumber("optionvalue")
-                    userdata.set(memberId, modded_userdata)
-                    console.log(`User data modified: ${memberId}`)
-                    await interaction.reply({
-                        content: `Great! 変更を保存しました。`,
-                        ephemeral: true
-                    });
-                }
+            getUserData(memberId).then(async data => {
+                let moddedUserData = JSON.parse(JSON.stringify(data))
+                moddedUserData[interaction.options.getString("voiceoption")] = interaction.options.getNumber("optionvalue")
+                setUserData(memberId, moddedUserData)
+                console.log(`User data modified: ${memberId}`)
+                await interaction.reply({
+                    content: `Great! 変更を保存しました。`,
+                    ephemeral: true
+                });
             })
+            modded_userdata[interaction.options.getString("voiceoption")] = interaction.options.getNumber("optionvalue")
+            userdata.set(memberId, modded_userdata)
         // TODO: この辺はfunctionにまとめて、できる限り複製されたコードをなくす
         } else if (interaction.commandName === 'addtodict') {
             if (interaction.options.getString("controldict") == "server" ) {
                 // このインタラクションをしたギルドIDを取得
                 const guildId = interaction.guild.id
                 // ユーザーデータのテーブルからギルドID名の行を取得
-                serverdata.get(guildId).then(async data => {
-                    // undefinedなら初期サーバーデータ引っ張ってきてpushする,そうじゃないならサーバーデータ引っ張ってきてpushする
-                    if( data === undefined ) {
-                        let modded_guilddata = JSON.parse(JSON.stringify(initial_serverdata))
-                        modded_guilddata.serverDict.push({ from: interaction.options.getString("dictreplacefrom"), to: interaction.options.getString("dictreplaceto") })
-                        serverdata.set(guildId, modded_guilddata)
-                        console.log(`New server data registered: ${guildId}`)
-                        await interaction.reply({
-                            content: `Great! 新しいサーバーデータを作成して、変更を保存しました。`,
-                            ephemeral: true
-                        });
-                    } else {
-                        let modded_guilddata = JSON.parse(JSON.stringify(initial_serverdata))
-                        modded_guilddata.serverDict.push({ from: interaction.options.getString("dictreplacefrom"), to: interaction.options.getString("dictreplaceto") })
-                        serverdata.set(guildId, modded_guilddata)
-                        console.log(`Server data modified: ${guildId}`)
-                        await interaction.reply({
-                            content: `Great! サーバーに変更を保存しました。`,
-                            ephemeral: true
-                        });
-                    }
+                getServerData(guildId).then(async data => {
+                    let moddedGuildData = JSON.parse(JSON.stringify(data))
+                    moddedGuildData.serverDict.push({ from: interaction.options.getString("dictreplacefrom"), to: interaction.options.getString("dictreplaceto") })
+                    setServerData(guildId, moddedGuildData)
+                    console.log(`Server data modified: ${guildId}`)
+                    await interaction.reply({
+                        content: `Great! サーバーに変更を保存しました。`,
+                        ephemeral: true
+                    });
                 })
             } else {
                 // このインタラクションをしたメンバーIDを取得
                 const memberId = interaction.member.id
                 // ユーザーデータのテーブルからメンバーID名の行を取得
-                userdata.get(memberId).then(async data => {
-                    if( data === undefined ) {
-                        let modded_userdata = JSON.parse(JSON.stringify(initial_userdata))
-                        modded_userdata.personalDict.push({ from: interaction.options.getString("dictreplacefrom"), to: interaction.options.getString("dictreplaceto") })
-                        userdata.set(memberId, modded_userdata)
-                        console.log(`New user data registered: ${memberId}`)
-                        await interaction.reply({
-                            content: `Great! 新しいユーザーデータを作成して、変更を保存しました。`,
-                            ephemeral: true
-                        });
-                    } else {
-                        let modded_userdata = JSON.parse(JSON.stringify(data))
-                        modded_userdata.personalDict.push({ from: interaction.options.getString("dictreplacefrom"), to: interaction.options.getString("dictreplaceto") })
-                        userdata.set(memberId, modded_userdata)
-                        console.log(`User data modified: ${memberId}`)
-                        await interaction.reply({
-                            content: `Great! 変更を保存しました。`,
-                            ephemeral: true
-                        });
-                    }
+                getUserData(memberId).then(async data => {
+                    let moddedUserData = JSON.parse(JSON.stringify(data))
+                    moddedUserData.personalDict.push({ from: interaction.options.getString("dictreplacefrom"), to: interaction.options.getString("dictreplaceto") })
+                    setUserData(memberId, moddedUserData)
+                    console.log(`User data modified: ${memberId}`)
+                    await interaction.reply({
+                        content: `Great! 変更を保存しました。`,
+                        ephemeral: true
+                    });
                 })
             }
         } else if (interaction.commandName === 'removefromdict') {
@@ -273,124 +244,66 @@ client.on("interactionCreate", async (interaction) => {
                 // このインタラクションをしたギルドIDを取得
                 const guildId = interaction.guild.id
                 // ユーザーデータのテーブルからギルドID名の行を取得
-                serverdata.get(guildId).then(async data => {
-                    // undefinedなら初期サーバーデータ引っ張ってきてpushする,そうじゃないならサーバーデータ引っ張ってきてpushする
-                    if( data === undefined ) {
-                        let modded_guilddata = JSON.parse(JSON.stringify(initial_serverdata))
-                        // 「お前消す」なワードのobjを探す
-                        const dictobj = modded_guilddata.serverDict.find(elem => elem.from === interaction.options.getString("deleteword"))
-                        if ( dictobj != undefined ) {
-                            // さっき探したやつでfilter
-                            modded_guilddata.serverDict = modded_guilddata.serverDict.filter(elem => elem !== dictobj)
-                            serverdata.set(guildId, modded_guilddata)
-                            console.log(`New server data registered: ${guildId}`)
-                            await interaction.reply({
-                                content: `Great! 新しいサーバーデータを作成して、変更を保存しました。`,
-                                ephemeral: true
-                            });
-                        } else {
-                            await interaction.reply({
-                                content: `指定されたワードが見つかりませんでした。`,
-                                ephemeral: true
-                            });
-                        }
+                getServerData(guildId).then(async data => {
+                    let moddedGuildData = JSON.parse(JSON.stringify(data))
+                    // 「お前消す」なワードのobjを探す
+                    const dictObj = moddedGuildData.serverDict.find(elem => elem.from === interaction.options.getString("deleteword"))
+                    console.log(dictObj)
+                    if ( dictObj != undefined ) {
+                        // さっき探したやつでfilter
+                        moddedGuildData.serverDict = moddedGuildData.serverDict.filter(elem => elem !== dictObj)
+                        setServerData(guildId, moddedGuildData)
+                        console.log(`Server data modified: ${guildId}`)
+                        await interaction.reply({
+                            content: `Great! サーバーに変更を保存しました。`,
+                            ephemeral: true
+                        });
                     } else {
-                        let modded_guilddata = JSON.parse(JSON.stringify(data))
-                        // 「お前消す」なワードのobjを探す
-                        const dictobj = modded_guilddata.serverDict.find(elem => elem.from === interaction.options.getString("deleteword"))
-                        console.log(dictobj)
-                        if ( dictobj != undefined ) {
-                            // さっき探したやつでfilter
-                            modded_guilddata.serverDict = modded_guilddata.serverDict.filter(elem => elem !== dictobj)
-                            serverdata.set(guildId, modded_guilddata)
-                            console.log(`Server data modified: ${guildId}`)
-                            await interaction.reply({
-                                content: `Great! サーバーに変更を保存しました。`,
-                                ephemeral: true
-                            });
-                        } else {
-                            await interaction.reply({
-                                content: `指定されたワードが見つかりませんでした。`,
-                                ephemeral: true
-                            });
-                        }
+                        await interaction.reply({
+                            content: `指定されたワードが見つかりませんでした。`,
+                            ephemeral: true
+                        });
                     }
                 })
             } else {
                 // このインタラクションをしたメンバーIDを取得
                 const memberId = interaction.member.id
                 // ユーザーデータのテーブルからメンバーID名の行を取得
-                userdata.get(memberId).then(async data => {
-                    // undefinedなら初期サーバーデータ引っ張ってきてpushする,そうじゃないならサーバーデータ引っ張ってきてpushする
-                    if( data === undefined ) {
-                        // 値渡し
-                        let modded_userdata = JSON.parse(JSON.stringify(initial_userdata))
-                        // 「お前消す」なワードのobjを探す
-                        const dictobj = modded_userdata.personalDict.find(elem => elem.from === interaction.options.getString("deleteword"))
-                        if ( dictobj != undefined ) {
-                            // さっき探したやつでfilter
-                            modded_userdata.personalDict = modded_userdata.personalDict.filter(elem => elem !== dictobj)
-                            userdata.set(memberId, modded_userdata)
-                            console.log(`New user data registered: ${memberId}`)
-                            await interaction.reply({
-                                content: `Great! 新しいユーザーデータを作成して、変更を保存しました。`,
-                                ephemeral: true
-                            });
-                        } else {
-                            await interaction.reply({
-                                content: `指定されたワードが見つかりませんでした。`,
-                                ephemeral: true
-                            });
-                        }
+                getUserData(memberId).then(async data => {
+                    // 値渡し
+                    let moddedUserData = JSON.parse(JSON.stringify(data))
+                    // 「お前消す」なワードのobjを探す
+                    const dictobj = moddedUserData.personalDict.find(elem => elem.from === interaction.options.getString("deleteword"))
+                    //console.log(dictobj)
+                    if ( dictobj != undefined ) {
+                        // さっき探したやつでfilter
+                        moddedUserData.personalDict = moddedUserData.personalDict.filter(elem => elem !== dictobj)
+                        setUserData(memberId, moddedUserData)
+                        console.log(`User data modified: ${memberId}`)
+                        await interaction.reply({
+                            content: `Great! 変更を保存しました。`,
+                            ephemeral: true
+                        });
                     } else {
-                        // 値渡し
-                        let modded_userdata = JSON.parse(JSON.stringify(data))
-                        // 「お前消す」なワードのobjを探す
-                        const dictobj = modded_userdata.personalDict.find(elem => elem.from === interaction.options.getString("deleteword"))
-                        console.log(dictobj)
-                        if ( dictobj != undefined ) {
-                            // さっき探したやつでfilter
-                            modded_userdata.personalDict = modded_userdata.personalDict.filter(elem => elem !== dictobj)
-                            userdata.set(memberId, modded_userdata)
-                            console.log(`User data modified: ${memberId}`)
-                            await interaction.reply({
-                                content: `Great! 変更を保存しました。`,
-                                ephemeral: true
-                            });
-                        } else {
-                            await interaction.reply({
-                                content: `指定されたワードが見つかりませんでした。`,
-                                ephemeral: true
-                            });
-                        }
+                        await interaction.reply({
+                            content: `指定されたワードが見つかりませんでした。`,
+                            ephemeral: true
+                        });
                     }
                 })
             }
         } else if (interaction.isStringSelectMenu()) {
             if (interaction.customId === 'setspeakerid') {
                 const memberId = interaction.member.id
-                userdata.get(memberId).then(async data => {
-                    if( data === undefined ) {
-                        let modded_userdata = JSON.parse(JSON.stringify(initial_userdata))
-                        modded_userdata.speakerId = interaction.values[0]
-                        userdata.set(memberId, modded_userdata)
-                        console.log(`New user data registered: ${memberId}`)
-                        await interaction.update({
-                            content: `Great! 新しいユーザーデータを作成して、変更を保存しました。`,
-                            ephemeral: true,
-                            components: []
-                        });
-                    } else {
-                        let modded_userdata = JSON.parse(JSON.stringify(data))
-                        modded_userdata.speakerId = interaction.values[0]
-                        userdata.set(memberId, modded_userdata)
-                        console.log(`User data modified: ${memberId}`)
-                        await interaction.update({
-                            content: `Great! 変更を保存しました。`,
-                            ephemeral: true,
-                            components: []
-                        });
-                    }
+                getUserData(memberId).then(async data => {
+                    let moddedUserData = JSON.parse(JSON.stringify(data))
+                    moddedUserData.speakerId = interaction.values[0]
+                    setUserData(memberId, moddedUserData)
+                    await interaction.update({
+                        content: `Great! 変更を保存しました。`,
+                        ephemeral: true,
+                        components: []
+                    });
                 })
             }
         } else {
@@ -402,33 +315,6 @@ client.on("interactionCreate", async (interaction) => {
     }
 });
 
-function getUserData(memberId) {
-    return new Promise((resolve, reject) => {
-        userdata.get(memberId).then(data => {
-            if( data === undefined ) {
-                userdata.set(memberId, initial_userdata)
-                console.log(`New user data registered: ${memberId}`)
-                resolve(initial_userdata)
-            } else {
-                resolve(data)
-            }
-        })
-    })
-}
-
-function getServerData(guildId) {
-    return new Promise((resolve, reject) => {
-        serverdata.get(guildId).then(data => {
-            if( data === undefined ) {
-                serverdata.set(guildId, initial_serverdata)
-                console.log(`New server data registered: ${guildId}`)
-                resolve(initial_serverdata)
-            } else {
-                resolve(data)
-            }
-        })
-    })
-}
 
 function playMessage(obj) {
     Promise.all([ getUserData(obj.memberId), getServerData(obj.guildId) ]).then(dataarray => {
@@ -439,53 +325,37 @@ function playMessage(obj) {
         const intonation = userdata.intonationScale ?? 1.0
         const dict = userdata.personalDict ?? []
         const serverdict = serverdata.serverDict ?? []
+        let speakerId = userdata.speakerId ?? 0
+        // ボイスオーバーライド
+        if (obj.content.startsWith("vor?=")) {
+            if (obj.content.indexOf("\n") !== -1) {
+                obj.content.split(",")
+            } else {
+            }
+            
+        }
         if (speakqueuearray.length >= fastforwardqueue) {
             speed = fastforwardspeed
         }
         
         let content = obj.content.toLowerCase()
         console.log(`Message in channel!: ${obj.content} ${userdata.speakerId} ${speed} ${pitch} ${intonation}`)
-        Promise.all([ dict.map(async elem => { content = content.replaceAll(elem.from.toLowerCase(), elem.to)}), serverdict.map(async elem => { content = content.replaceAll(elem.from.toLowerCase(), elem.to)}) ]).then(() => {
-            fetch(`http://${voicevox_host}/audio_query?text=${content}&speaker=${userdata.speakerId}`, {
+        Promise.all([ dict.map(async elem => { content = content.replaceAll(elem.from.toLowerCase(), elem.to)}), serverdict.map(async elem => { content = content.replaceAll(elem.from.toLowerCase(), elem.to)}) ]).then(async () => {
+            const audioqueryresponse = await fetch(`http://${voicevox_host}/audio_query?text=${content}&speaker=${speakerId}`, {
                 method: "POST"
-            }).then(response => {
-                if (response.status === 200) {
-                    response.text().then(text => {
-                        const parsedquery = JSON.parse(text)
-                        parsedquery.speedScale = speed
-                        parsedquery.pitchScale = pitch
-                        parsedquery.intonationScale = intonation
-                        console.log(parsedquery)
-                        fetch(`http://${voicevox_host}/synthesis?speaker=${userdata.speakerId}`, {
-                            method: "POST",
-                            headers: {"Content-Type": "application/json", "accept": "audio/wav"},
-                            body: JSON.stringify(parsedquery)
-                        }).then(response => {
-                            //console.log(response)
-                            if (response.status === 200) {
-                                response.arrayBuffer().then(res => {
-                                    const buffer = Buffer.from(res)
-                                    fs.writeFile("temp/audio.wav", buffer, (err) => {
-                                        if (err) {
-                                            console.log(`ファイルの書き込みに失敗: ${err}`)
-                                        } else {
-                                            console.log(`ファイルを書き込みました`)
-                                            const resource = createAudioResource("temp/audio.wav");
-                                            player.play(resource);
-                                            console.log(`再生中`)
-                                        }
-                                    })
-                                })
-                            } else {
-                                console.log(`VOICEVOXの呼び出しに失敗: ${response.status}`)
-                                response.text().then(res => {
-                                    console.log(res)
-                                })
-                            }
-                        })
-                    })
-                }
             })
+            let queryresponse = await audioqueryresponse.text() ?? null
+            if (queryresponse) {
+                const parsedquery = JSON.parse(queryresponse)
+                parsedquery.speedScale = speed
+                parsedquery.pitchScale = pitch
+                parsedquery.intonationScale = intonation
+                console.log(parsedquery)
+
+                let voiceresource = await synthesisRequest(voicevox_host, parsedquery, speakerId)
+                player.play(voiceresource);
+                console.log(`再生中`)
+            }
         })
     })
 }

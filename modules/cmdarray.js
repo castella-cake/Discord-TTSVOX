@@ -1,19 +1,21 @@
 const { ApplicationCommandOptionType } = require('discord.js');
+const { cmd_prefix } = require('../config.json');
+
 const cmdArray = [
     {
-        name: "ping",
+        name: `ping`,
         description: "Replies with Pong!",
     },
     {
-        name: "leave",
+        name: `leave`,
         description: "退出します"
     },
     {
-        name: "join",
+        name: `join`,
         description: "実行者がいるボイスチャンネルに参加します。"
     },
     {
-        name: "setvoice",
+        name: `setvoice`,
         description: "話者を変更します。実行すると、スタイルの選択パネルが表示されます。設定はあなた以外には見えません。",
         options: [{
             type: ApplicationCommandOptionType.String,
@@ -29,7 +31,7 @@ const cmdArray = [
         }],
     },
     {
-        name: "setvoiceoption",
+        name: `setvoiceoption`,
         description: "ボイスの話速などを変更します。",
         options: [
             {
@@ -52,7 +54,7 @@ const cmdArray = [
         ],
     },
     {
-        name: "addtodict",
+        name: `addtodict`,
         description: "個人辞書/サーバー辞書にルールを追加します。",
         options: [
             {
@@ -80,7 +82,7 @@ const cmdArray = [
         ],
     },
     {
-        name: "removefromdict",
+        name: `removefromdict`,
         description: "個人辞書/サーバー辞書からルールを削除します。",
         options: [
             {
@@ -102,7 +104,23 @@ const cmdArray = [
         ],
     },
     {
-        name: "credit",
+        name: `showdict`,
+        description: "個人辞書/サーバー辞書の内容を表示します。",
+        options: [
+            {
+                type: ApplicationCommandOptionType.String,
+                name: "controldict",
+                description: "表示する辞書を選択",
+                required: true,
+                choices: [
+                    { name: "個人", value: "personal" },
+                    { name: "サーバー", value: "server" }
+                ]
+            }
+        ],
+    },
+    {
+        name: `credit`,
         description: "クレジットを表示します。"
     }
 ]
