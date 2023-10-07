@@ -415,7 +415,7 @@ function playMessage(obj) {
             }
             
         }
-        if (speakqueuearray.length >= fastforwardqueue) {
+        if (fastforwardqueue > 0 && speakqueuearray.length >= fastforwardqueue) {
             speed = fastforwardspeed
         }
         
