@@ -5,5 +5,7 @@
     "voicevox_host": "127.0.0.1:50021",
     "database_host": "sqlite://db.sqlite",
     "fastforwardqueue": 5,
-    "fastforwardspeed": 1.8
+    "fastforwardspeed": 1.8,
+    "admincmd_prefix": "tva!",
+    "owner_userid": "0"
 }

@@ -1,6 +1,6 @@
 const { Client, GatewayIntentBits, Partials, ChannelType, ApplicationCommandOptionType, ActivityType, ActionRowBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, InteractionType } = require('discord.js');
 const { joinVoiceChannel, getVoiceConnection, createAudioPlayer, createAudioResource, AudioPlayerStatus } = require('@discordjs/voice');
-const { bot_token, initial_userdata, voicevox_host, database_host, initial_serverdata, fastforwardqueue, fastforwardspeed } = require('./config.json');
+const { bot_token, initial_userdata, voicevox_host, database_host, initial_serverdata, fastforwardqueue, fastforwardspeed, owner_userid, admincmd_prefix } = require('./config.json');
 const { cmdArray } = require('./modules/cmdarray.js');
 const { synthesisRequest } = require('./modules/synthesis.js')
 const { getUserData, setUserData, getServerData, setServerData } = require('./modules/dbcontrol.js')
@@ -292,6 +292,87 @@ client.on("interactionCreate", async (interaction) => {
                     }
                 })
             }
+        } else if (interaction.commandName === 'showdict') {
+            let listTextArray = []
+            let ephemeralStat = !interaction.options.getBoolean("noephemeral") ?? true
+            console.log(interaction.options.getBoolean("noephemeral"))
+            if (interaction.options.getString("controldict") == "server" ) {
+                // このインタラクションをしたギルドIDを取得
+                const guildId = interaction.guild.id
+                // ユーザーデータのテーブルからギルドID名の行を取得
+                getServerData(guildId).then(async data => {
+                    let serverDict = data.serverDict
+                    if ( serverDict == null || serverDict == undefined || serverDict.length == 0 ) {
+                        await interaction.reply({
+                            content: "まだサーバー辞書の登録が一つもありません。",
+                            ephemeral: true
+                        });
+                    } else {
+                        // 辞書のArrayでforEachしてテキストのArrayを生成する
+                        serverDict.forEach(element => {
+                            listTextArray.push(`${element.from}→${element.to}`)
+                        });
+                        // 生成したArrayをjoinして、ファイルに書き込んだら添付して送信
+                        const dictText = listTextArray.join("\n")
+                        fs.writeFile("./temp/dict.txt", dictText, async (err) => {
+                            await interaction.reply({
+                                content: "サーバー辞書の内容をテキストファイルに出力しました。",
+                                ephemeral: ephemeralStat,
+                                files: ["./temp/dict.txt"]
+                            });
+                        })
+                    }
+
+                })
+            } else {
+                // このインタラクションをしたメンバーIDを取得
+                const memberId = interaction.member.id
+                // ユーザーデータのテーブルからメンバーID名の行を取得
+                getUserData(memberId).then(async data => {
+                    let personalDict = data.personalDict
+                    if ( personalDict == null || personalDict == undefined || personalDict.length == 0 ) {
+                        await interaction.reply({
+                            content: "まだ個人辞書の登録が一つもありません。",
+                            ephemeral: true
+                        });
+                    } else {
+                        personalDict.forEach(element => {
+                            listTextArray.push(`${element.from}→${element.to}`)
+                        });
+                        const dictText = listTextArray.join("\n")
+                        fs.writeFile("./temp/dict.txt", dictText, async (err) => {
+                            await interaction.reply({
+                                content: "個人辞書の内容をテキストファイルに出力しました。",
+                                ephemeral: ephemeralStat,
+                                files: ["./temp/dict.txt"]
+                            });
+                        })
+                    }
+                    
+                })
+            }
+        } else if (interaction.commandName === 'owner_shutdown') {
+            // このインタラクションをしたメンバーIDを取得
+            const memberId = interaction.member.id
+            if ( memberId === owner_userid ) {
+                await interaction.reply({
+                    content: "シャットダウンします… お待ちください",
+                    ephemeral: false
+                });
+                client.user.setPresence({
+                    activities: [{ name: `終了中`, type: ActivityType.Watching }],
+                    status: 'dnd',
+                });
+                client.destroy()
+                process.exit(0)
+            } else {
+                console.log(`owner_shutdownが使用されましたが、configで指定されたユーザーIDに一致しませんでした。これを行ったユーザー: ${memberId}`)
+                await interaction.reply({
+                    content: "BotのシャットダウンはこのBotのオーナー以外は使用できません。この事象は記録・報告されます。",
+                    ephemeral: false
+                });
+            }
+
         } else if (interaction.isStringSelectMenu()) {
             if (interaction.customId === 'setspeakerid') {
                 const memberId = interaction.member.id
@@ -371,6 +452,7 @@ client.on('messageCreate', message => {
             speakqueuearray.push({ content: message.content, memberId: message.member.id, guildId: message.guild.id  })
         }
     }
+
     //console.log(`Message coming: ${message.content}`)
 });
 

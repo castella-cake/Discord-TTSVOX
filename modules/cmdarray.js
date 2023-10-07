@@ -1,5 +1,4 @@
 const { ApplicationCommandOptionType } = require('discord.js');
-const { cmd_prefix } = require('../config.json');
 
 const cmdArray = [
     {
@@ -116,8 +115,18 @@ const cmdArray = [
                     { name: "個人", value: "personal" },
                     { name: "サーバー", value: "server" }
                 ]
+            },
+            {
+                type: ApplicationCommandOptionType.Boolean,
+                name: "noephemeral",
+                description: "自分以外にも表示するかどうか(何も指定しない場合は「True」)",
+                required: false
             }
         ],
+    },
+    {
+        name: `owner_shutdown`,
+        description: "オーナーのみが使用可能: クライアントを破壊してBotを停止します。(現在の非同期処理は全て強制終了されます)"
     },
     {
         name: `credit`,
