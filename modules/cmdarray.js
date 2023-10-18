@@ -126,7 +126,7 @@ const cmdArray = [
     },
     {
         name: `owner_shutdown`,
-        description: "オーナーのみが使用可能: クライアントを破壊してBotを停止します。(現在の非同期処理は全て強制終了されます)"
+        description: "Botのオーナーのみが使用可能: クライアントを破壊してBotを安全に停止します。(現在の非同期処理は全て強制終了されます)"
     },
     {
         name: `credit`,

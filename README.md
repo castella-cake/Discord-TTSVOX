@@ -1,6 +1,7 @@
 # Discord-TTSVOX
 TTSVOXは、Node.jsとDiscord.jsを用いて開発されたDiscord用のVOICEVOX読み上げBotです。   
 1サーバーに1個のBotで動作させることを想定しています。   
+プロジェクトはまだ開発段階にあり、予期しないバグに遭遇したりする可能性があります。
 
 # Feature
 現在実装済みの機能。   
@@ -12,6 +13,7 @@ TTSVOXは、Node.jsとDiscord.jsを用いて開発されたDiscord用のVOICEVOX
 - [x] ボイス設定変更機能
 - [x] 個人簡易辞書機能
 - [x] サーバー毎簡易辞書機能
+- [x] 読み上げキューが多い場合に速読する
 
 # Quick start
 このリポジトリにVOICEVOXエンジンは含まれていません。各自でダウンロードする必要があります。   
@@ -46,5 +48,4 @@ npm run start
 - `database_host`: 使用するSQLiteデータベースのアドレス
 - `fastforwardqueue`: キューされたメッセージが設定された値以上に多い場合に速読を有効化します。0で無効化
 - `fastforwardspeed`: 速読が有効化された場合のスピード
-- `admincmd_prefix`: アドミン用コマンドのPrefix
 - `owner_userid`: BotのオーナーのユーザーID

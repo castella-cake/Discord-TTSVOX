@@ -1,11 +1,10 @@
 {
     "bot_token": "TOKEN HERE",
-    "initial_userdata": { "speakerId": 0, "personalDict": [], "speedScale": 1.0, "pitchScale": 1.0, "intonationScale": 1.0 },
+    "initial_userdata": { "speakerId": 0, "personalDict": [], "speedScale": 1.0, "pitchScale": 0.0, "intonationScale": 1.0 },
     "initial_serverdata": { "serverDict": [] },
     "voicevox_host": "127.0.0.1:50021",
     "database_host": "sqlite://db.sqlite",
-    "fastforwardqueue": 5,
+    "fastforwardqueue": 3,
     "fastforwardspeed": 1.8,
-    "admincmd_prefix": "tva!",
     "owner_userid": "0"
 }

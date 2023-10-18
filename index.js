@@ -1,4 +1,4 @@
-const { Client, GatewayIntentBits, Partials, ChannelType, ApplicationCommandOptionType, ActivityType, ActionRowBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, InteractionType } = require('discord.js');
+const { Client, GatewayIntentBits, Partials, ChannelType, ApplicationCommandOptionType, ActivityType, ActionRowBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, InteractionType, PermissionFlagsBits, PermissionsBitField } = require('discord.js');
 const { joinVoiceChannel, getVoiceConnection, createAudioPlayer, createAudioResource, AudioPlayerStatus } = require('@discordjs/voice');
 const { bot_token, initial_userdata, voicevox_host, database_host, initial_serverdata, fastforwardqueue, fastforwardspeed, owner_userid, admincmd_prefix } = require('./config.json');
 const { cmdArray } = require('./modules/cmdarray.js');
@@ -19,6 +19,7 @@ let speakersdata = []
 const player = createAudioPlayer();
 let speakersnamearray = []
 let speakqueuearray = []
+let isBusy = false
 
 client.once("ready", async () => {
     client.user.setPresence({
@@ -206,8 +207,6 @@ client.on("interactionCreate", async (interaction) => {
                     ephemeral: true
                 });
             })
-            modded_userdata[interaction.options.getString("voiceoption")] = interaction.options.getNumber("optionvalue")
-            userdata.set(memberId, modded_userdata)
         // TODO: この辺はfunctionにまとめて、できる限り複製されたコードをなくす
         } else if (interaction.commandName === 'addtodict') {
             if (interaction.options.getString("controldict") == "server" ) {
@@ -248,7 +247,7 @@ client.on("interactionCreate", async (interaction) => {
                     let moddedGuildData = JSON.parse(JSON.stringify(data))
                     // 「お前消す」なワードのobjを探す
                     const dictObj = moddedGuildData.serverDict.find(elem => elem.from === interaction.options.getString("deleteword"))
-                    console.log(dictObj)
+                    //console.log(dictObj)
                     if ( dictObj != undefined ) {
                         // さっき探したやつでfilter
                         moddedGuildData.serverDict = moddedGuildData.serverDict.filter(elem => elem !== dictObj)
@@ -295,7 +294,7 @@ client.on("interactionCreate", async (interaction) => {
         } else if (interaction.commandName === 'showdict') {
             let listTextArray = []
             let ephemeralStat = !interaction.options.getBoolean("noephemeral") ?? true
-            console.log(interaction.options.getBoolean("noephemeral"))
+            //console.log(interaction.options.getBoolean("noephemeral"))
             if (interaction.options.getString("controldict") == "server" ) {
                 // このインタラクションをしたギルドIDを取得
                 const guildId = interaction.guild.id
@@ -368,7 +367,7 @@ client.on("interactionCreate", async (interaction) => {
             } else {
                 console.log(`owner_shutdownが使用されましたが、configで指定されたユーザーIDに一致しませんでした。これを行ったユーザー: ${memberId}`)
                 await interaction.reply({
-                    content: "BotのシャットダウンはこのBotのオーナー以外は使用できません。この事象は記録・報告されます。",
+                    content: "BotのシャットダウンはこのBotのオーナー以外は使用できません。この事象は記録されます。",
                     ephemeral: false
                 });
             }
@@ -398,25 +397,27 @@ client.on("interactionCreate", async (interaction) => {
 
 
 function playMessage(obj) {
+    isBusy = true
     Promise.all([ getUserData(obj.memberId), getServerData(obj.guildId) ]).then(dataarray => {
         const userdata = dataarray[0]
         const serverdata = dataarray[1]
-        let speed = dataarray.speedScale ?? 1.0
+        let speed = userdata.speedScale ?? 1.0
         const pitch = userdata.pitchScale ?? 0.0
         const intonation = userdata.intonationScale ?? 1.0
         const dict = userdata.personalDict ?? []
         const serverdict = serverdata.serverDict ?? []
         let speakerId = userdata.speakerId ?? 0
         // ボイスオーバーライド
-        if (obj.content.startsWith("vor?=")) {
+        /*if (obj.content.startsWith("vor?=")) {
             if (obj.content.indexOf("\n") !== -1) {
                 obj.content.split(",")
             } else {
             }
             
-        }
+        }*/
         if (fastforwardqueue > 0 && speakqueuearray.length >= fastforwardqueue) {
             speed = fastforwardspeed
+            console.log("速読しました。 現在のキュー: " + speakqueuearray.length)
         }
         
         let content = obj.content.toLowerCase()
@@ -431,7 +432,7 @@ function playMessage(obj) {
                 parsedquery.speedScale = speed
                 parsedquery.pitchScale = pitch
                 parsedquery.intonationScale = intonation
-                console.log(parsedquery)
+                //console.log(parsedquery)
 
                 let voiceresource = await synthesisRequest(voicevox_host, parsedquery, speakerId)
                 player.play(voiceresource);
@@ -446,10 +447,11 @@ client.on('messageCreate', message => {
         return;
     }
     if (message.channel.id === currenttextchannelid) {
-        if (player.state.status === AudioPlayerStatus.Idle) {
+        if ( player.state.status === AudioPlayerStatus.Idle && isBusy !== true ) {
             playMessage({ content: message.content, memberId: message.member.id, guildId: message.guild.id })
         } else {
             speakqueuearray.push({ content: message.content, memberId: message.member.id, guildId: message.guild.id  })
+            console.log("読み上げ中のメッセージがあったため、キューに移動しました")
         }
     }
 
@@ -461,8 +463,7 @@ client.on('voiceStateUpdate', (oldstate, newstate) => {
         return;
     }
     if (oldstate.channelId === null && newstate.channelId !== null) {
-        console.log("It's all connected!")
-        console.log(newstate.channel.members.size)
+        console.log("It's all connected!" + newstate.channel.members.size)
     } else if (oldstate.channelId !== null && newstate.channelId === null) {
         console.log("It's all disconnected!")
         if (oldstate.channel.members.size < 2 && oldstate.channelId === currentvoicechannelid) {
@@ -482,6 +483,7 @@ client.on('voiceStateUpdate', (oldstate, newstate) => {
 });
 
 player.on(AudioPlayerStatus.Idle, () => {
+    isBusy = false
     if (speakqueuearray.length > 0) {
         playMessage(speakqueuearray[0])
         speakqueuearray.shift()
