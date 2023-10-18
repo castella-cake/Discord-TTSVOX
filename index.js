@@ -1,6 +1,7 @@
 const { Client, GatewayIntentBits, Partials, ChannelType, ApplicationCommandOptionType, ActivityType, ActionRowBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, InteractionType, PermissionFlagsBits, PermissionsBitField } = require('discord.js');
 const { joinVoiceChannel, getVoiceConnection, createAudioPlayer, createAudioResource, AudioPlayerStatus } = require('@discordjs/voice');
-const { bot_token, initial_userdata, voicevox_host, database_host, initial_serverdata, fastforwardqueue, fastforwardspeed, owner_userid, admincmd_prefix } = require('./config.json');
+const { bot_token, voicevox_host, database_host, fastforwardqueue, fastforwardspeed, owner_userid, language_file } = require('./config.json');
+const lang = require('./langs/' + language_file);
 const { cmdArray } = require('./modules/cmdarray.js');
 const { synthesisRequest } = require('./modules/synthesis.js')
 const { getUserData, setUserData, getServerData, setServerData } = require('./modules/dbcontrol.js')
@@ -23,7 +24,7 @@ let isBusy = false
 
 client.once("ready", async () => {
     client.user.setPresence({
-        activities: [{ name: `VOICEVOXエンジンに連絡中`, type: ActivityType.Watching }],
+        activities: [{ name: lang.CONNECTING_TO_ENGINE, type: ActivityType.Watching }],
         status: 'dnd',
     });
     // スラッシュコマンドを作成する
@@ -41,7 +42,7 @@ client.once("ready", async () => {
                 })
                 // OKだったら、話者情報も取得する
                 client.user.setPresence({
-                    activities: [{ name: `エンジンから情報取得中`, type: ActivityType.Watching }],
+                    activities: [{ name: lang.GETTING_ENGINE_INFO, type: ActivityType.Watching }],
                     status: 'dnd',
                 });
                 fetch(`http://${voicevox_host}/speakers`, {
@@ -53,7 +54,7 @@ client.once("ready", async () => {
                             speakersnamearray = speakersdata.map( elem => elem.name )
                             // isreadyを立ててコマンドの受付を開始する
                             client.user.setPresence({
-                                activities: [{ name: `READY`, type: ActivityType.Playing }],
+                                activities: [{ name: lang.READY, type: ActivityType.Playing }],
                                 status: 'online',
                             });
                             isready = true
@@ -63,7 +64,7 @@ client.once("ready", async () => {
                 })
             } else {
                 client.user.setPresence({
-                    activities: [{ name: `エンジンからの情報取得に失敗`, type: ActivityType.Watching }],
+                    activities: [{ name: lang.ENGINE_CONNECT_FAIL, type: ActivityType.Watching }],
                     status: 'dnd',
                 });
                 console.log(`重大なエラー: VOICEVOXエンジンの呼び出しに失敗しました。ステータスコードは ${response.status} でした。`)
@@ -71,7 +72,7 @@ client.once("ready", async () => {
         })
     } catch (error) {
         client.user.setPresence({
-            activities: [{ name: `エンジンからの情報取得に失敗`, type: ActivityType.Watching }],
+            activities: [{ name: lang.ENGINE_CONNECT_FAIL, type: ActivityType.Watching }],
             status: 'dnd',
         });
         console.log(`重大なエラー: VOICEVOXエンジンの呼び出しに失敗しました。:${error}`)
@@ -86,19 +87,39 @@ let currentvoicechannelid
 client.on("interactionCreate", async (interaction) => {
     try {
         if (!isready) {
-            await interaction.reply('Botは準備中です。もしこれが続いている場合は、Botのオーナーに連絡してください。');
+            await interaction.reply(lang.ENGINE_IS_PREPARING);
             return;
         }
-        if (interaction.commandName === 'ping') {
-            await interaction.reply('Pong!!!!!!!!!');
-        } else if (interaction.commandName === 'join') {
+        if (interaction.isStringSelectMenu()) {
+            if (interaction.customId === 'setspeakerid') {
+                const memberId = interaction.member.id
+                getUserData(memberId).then(async data => {
+                    let moddedUserData = JSON.parse(JSON.stringify(data))
+                    moddedUserData.speakerId = interaction.values[0]
+                    setUserData(memberId, moddedUserData)
+                    await interaction.update({
+                        content: lang.SAVE_SUCCESS,
+                        ephemeral: true,
+                        components: []
+                    });
+                })
+            }
+        } else if ( !interaction.options.getSubcommand() ) {
+            await interaction.update({
+                content: lang.ERROR,
+                ephemeral: true,
+                components: []
+            });
+        } else if (interaction.options.getSubcommand() === 'ping') {
+            await interaction.reply(lang.PONG);
+        } else if (interaction.options.getSubcommand() === 'join') {
             const guild = interaction.guild;
             const member = await guild.members.fetch(interaction.member.id);
             const memberVC = member.voice.channel;
-            let message = "ありえないエラーです"
+            let message = lang.ERROR
             if (!memberVC || !memberVC.joinable || !memberVC.speakable) {
                 console.log("Voice connection check failed")
-                message = "ボイスチャンネルに接続できませんでした。ボイスチャンネルに参加しているか、またBotがチャンネルへの接続/発言権限を持っているかを確認してください。"
+                message = lang.VC_JOIN_FAIL
             } else if ( !interaction.guild.members.me.voice.channel ) {
                 console.log(interaction.channel)
                 currenttextchannelid = interaction.channel.id
@@ -111,20 +132,20 @@ client.on("interactionCreate", async (interaction) => {
                     selfDeaf: true,
                 });
                 connection.subscribe(player);
-                message = "参加したよ～。"
+                message = lang.JOIN
                 speakqueuearray = []
             } else {
-                message = "すでにボイスチャンネルに参加しているようです。"
+                message = lang.ALREADY_JOINED
             }
             await interaction.reply(message);
-        } else if (interaction.commandName === 'leave') {
+        } else if (interaction.options.getSubcommand() === 'leave') {
             const guild = interaction.guild;
             const member = await guild.members.fetch(interaction.member.id);
             const memberVC = member.voice.channel;
-            let message = "ありえないエラーです。Botのクラッシュ後に実行した場合は、強制的に切断してください。"
+            let message = lang.VC_JOIN_ERROR
             if (!memberVC || !memberVC.joinable || !memberVC.speakable) {
                 console.log("Voice connection check failed")
-                message = "切断に失敗しました"
+                message = lang.VC_DISCONNECT_FAIL
             } else {
                 const connection = getVoiceConnection(memberVC.guild.id);
                 //console.log(connection)
@@ -132,11 +153,11 @@ client.on("interactionCreate", async (interaction) => {
                     currenttextchannelid = null
                     currentvoicechannelid = null
                     connection.destroy();
-                    message = "退出しました"
+                    message = lang.VC_DISCONNECTED
                 }
             }
             await interaction.reply(message);
-        } else if (interaction.commandName === 'setvoice') {
+        } else if (interaction.options.getSubcommand() === 'setvoice') {
             /*const row = new ActionRowBuilder()
                 .addComponents(selectspeakersmenu);
             await interaction.reply({
@@ -155,44 +176,44 @@ client.on("interactionCreate", async (interaction) => {
                 })).then(async () => {
                     const select = new StringSelectMenuBuilder()
                         .setCustomId('setspeakerid')
-                        .setPlaceholder('わしゃの スタイルは？')
+                        .setPlaceholder(lang.SPEAKER_STYLE)
                         .addOptions(styleselectarray);
                     const row = new ActionRowBuilder()
                         .addComponents(select);
                     await interaction.reply({
-                        content: 'スタイルを選択',
+                        content: `スタイル${lang.Q_SELECT}`,
                         components: [row],
                         ephemeral: true
                     })
                 })
             } else {
                 await interaction.reply({
-                    content: `指定された話者名が見つかりませんでした。\n利用可能な話者は ${speakersnamearray.join(',')}です。 `,
+                    content: `${SPEAKER_NOT_FOUND}${speakersnamearray.join(',')}`,
                     ephemeral: true
                 });
             }
-        } else if (interaction.commandName === 'credit') {
+        } else if (interaction.options.getSubcommand() === 'credit') {
             await interaction.reply({
                 content: `VOICEVOX: ${speakersnamearray.join(',')}`,
                 ephemeral: true
             });
-        } else if (interaction.commandName === 'setvoiceoption') {
+        } else if (interaction.options.getSubcommand() === 'setvoiceoption') {
             const memberId = interaction.member.id
             if (interaction.options.getString("voiceoption") === "speedScale" && ( interaction.options.getNumber("optionvalue") > 2.0 || interaction.options.getNumber("optionvalue") < 0.5 )) {
                 await interaction.reply({
-                    content: `話速は0.5~2.0以内で指定する必要があります。`,
+                    content: `話速は0.5~2.0${lang.SHOULD_WITHIN}`,
                     ephemeral: true,
                 });
                 return;
             } else if (interaction.options.getString("voiceoption") === "pitchScale" && ( interaction.options.getNumber("optionvalue") > 0.15 || interaction.options.getNumber("optionvalue") < -0.15 )) {
                 await interaction.reply({
-                    content: `ピッチは-0.15~0.15以内で指定する必要があります。`,
+                    content: `ピッチは-0.15~0.15${lang.SHOULD_WITHIN}`,
                     ephemeral: true,
                 });
                 return;
             } else if (interaction.options.getString("voiceoption") === "intonationScale" && ( interaction.options.getNumber("optionvalue") > 2.0 || interaction.options.getNumber("optionvalue") < 0.5 )) {
                 await interaction.reply({
-                    content: `抑揚は0.5~2.0以内で指定する必要があります。`,
+                    content: `抑揚は0.5~2.0${lang.SHOULD_WITHIN}`,
                     ephemeral: true,
                 });
                 return;
@@ -203,12 +224,12 @@ client.on("interactionCreate", async (interaction) => {
                 setUserData(memberId, moddedUserData)
                 console.log(`User data modified: ${memberId}`)
                 await interaction.reply({
-                    content: `Great! 変更を保存しました。`,
+                    content: lang.SAVE_SUCCESS,
                     ephemeral: true
                 });
             })
         // TODO: この辺はfunctionにまとめて、できる限り複製されたコードをなくす
-        } else if (interaction.commandName === 'addtodict') {
+        } else if (interaction.options.getSubcommand() === 'addtodict') {
             if (interaction.options.getString("controldict") == "server" ) {
                 // このインタラクションをしたギルドIDを取得
                 const guildId = interaction.guild.id
@@ -219,7 +240,7 @@ client.on("interactionCreate", async (interaction) => {
                     setServerData(guildId, moddedGuildData)
                     console.log(`Server data modified: ${guildId}`)
                     await interaction.reply({
-                        content: `Great! サーバーに変更を保存しました。`,
+                        content: lang.SAVE_SUCCESS_SERVER,
                         ephemeral: true
                     });
                 })
@@ -233,12 +254,12 @@ client.on("interactionCreate", async (interaction) => {
                     setUserData(memberId, moddedUserData)
                     console.log(`User data modified: ${memberId}`)
                     await interaction.reply({
-                        content: `Great! 変更を保存しました。`,
+                        content: lang.SAVE_SUCCESS,
                         ephemeral: true
                     });
                 })
             }
-        } else if (interaction.commandName === 'removefromdict') {
+        } else if (interaction.options.getSubcommand() === 'removefromdict') {
             if (interaction.options.getString("controldict") == "server" ) {
                 // このインタラクションをしたギルドIDを取得
                 const guildId = interaction.guild.id
@@ -254,12 +275,12 @@ client.on("interactionCreate", async (interaction) => {
                         setServerData(guildId, moddedGuildData)
                         console.log(`Server data modified: ${guildId}`)
                         await interaction.reply({
-                            content: `Great! サーバーに変更を保存しました。`,
+                            content: lang.SAVE_SUCCESS_SERVER,
                             ephemeral: true
                         });
                     } else {
                         await interaction.reply({
-                            content: `指定されたワードが見つかりませんでした。`,
+                            content: lang.WORD_NOT_FOUND,
                             ephemeral: true
                         });
                     }
@@ -280,18 +301,18 @@ client.on("interactionCreate", async (interaction) => {
                         setUserData(memberId, moddedUserData)
                         console.log(`User data modified: ${memberId}`)
                         await interaction.reply({
-                            content: `Great! 変更を保存しました。`,
+                            content: lang.SAVE_SUCCESS,
                             ephemeral: true
                         });
                     } else {
                         await interaction.reply({
-                            content: `指定されたワードが見つかりませんでした。`,
+                            content: lang.WORD_NOT_FOUND,
                             ephemeral: true
                         });
                     }
                 })
             }
-        } else if (interaction.commandName === 'showdict') {
+        } else if (interaction.options.getSubcommand() === 'showdict') {
             let listTextArray = []
             let ephemeralStat = !interaction.options.getBoolean("noephemeral") ?? true
             //console.log(interaction.options.getBoolean("noephemeral"))
@@ -303,7 +324,7 @@ client.on("interactionCreate", async (interaction) => {
                     let serverDict = data.serverDict
                     if ( serverDict == null || serverDict == undefined || serverDict.length == 0 ) {
                         await interaction.reply({
-                            content: "まだサーバー辞書の登録が一つもありません。",
+                            content: `サーバー${lang.NO_DICT}`,
                             ephemeral: true
                         });
                     } else {
@@ -315,7 +336,7 @@ client.on("interactionCreate", async (interaction) => {
                         const dictText = listTextArray.join("\n")
                         fs.writeFile("./temp/dict.txt", dictText, async (err) => {
                             await interaction.reply({
-                                content: "サーバー辞書の内容をテキストファイルに出力しました。",
+                                content: `サーバー${lang.DICT_OUTPUT_TO_FILE}`,
                                 ephemeral: ephemeralStat,
                                 files: ["./temp/dict.txt"]
                             });
@@ -331,7 +352,7 @@ client.on("interactionCreate", async (interaction) => {
                     let personalDict = data.personalDict
                     if ( personalDict == null || personalDict == undefined || personalDict.length == 0 ) {
                         await interaction.reply({
-                            content: "まだ個人辞書の登録が一つもありません。",
+                            content: `個人${lang.NO_DICT}`,
                             ephemeral: true
                         });
                     } else {
@@ -341,7 +362,7 @@ client.on("interactionCreate", async (interaction) => {
                         const dictText = listTextArray.join("\n")
                         fs.writeFile("./temp/dict.txt", dictText, async (err) => {
                             await interaction.reply({
-                                content: "個人辞書の内容をテキストファイルに出力しました。",
+                                content: `個人${lang.DICT_OUTPUT_TO_FILE}`,
                                 ephemeral: ephemeralStat,
                                 files: ["./temp/dict.txt"]
                             });
@@ -350,7 +371,7 @@ client.on("interactionCreate", async (interaction) => {
                     
                 })
             }
-        } else if (interaction.commandName === 'owner_shutdown') {
+        } else if (interaction.options.getSubcommand() === 'owner_shutdown') {
             // このインタラクションをしたメンバーIDを取得
             const memberId = interaction.member.id
             if ( memberId === owner_userid ) {
@@ -372,26 +393,12 @@ client.on("interactionCreate", async (interaction) => {
                 });
             }
 
-        } else if (interaction.isStringSelectMenu()) {
-            if (interaction.customId === 'setspeakerid') {
-                const memberId = interaction.member.id
-                getUserData(memberId).then(async data => {
-                    let moddedUserData = JSON.parse(JSON.stringify(data))
-                    moddedUserData.speakerId = interaction.values[0]
-                    setUserData(memberId, moddedUserData)
-                    await interaction.update({
-                        content: `Great! 変更を保存しました。`,
-                        ephemeral: true,
-                        components: []
-                    });
-                })
-            }
         } else {
             await interaction.reply('Invalid Command.....');
         }
     } catch (err) {
         console.log(err)
-        interaction.channel.send("エラー！！問題が発生しました。")
+        interaction.channel.send(lang.UNEXCEPTED_ERROR)
     }
 });
 
@@ -472,7 +479,7 @@ client.on('voiceStateUpdate', (oldstate, newstate) => {
             if (connection !== undefined) {
                 const textch = client.channels.cache.get(currenttextchannelid)
                 if (textch) {
-                    textch.send("誰もいなくなったため、退出しました")
+                    textch.send(lang.AUTO_DISCONNECT_NOLISTENER)
                 }
                 connection.destroy();
                 currenttextchannelid = null
