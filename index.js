@@ -22,6 +22,10 @@ let speakersnamearray = []
 let speakqueuearray = []
 let isBusy = false
 
+if (!fs.existsSync("temp")) {
+    fs.mkdirSync("temp");
+}
+
 client.once("ready", async () => {
     client.user.setPresence({
         activities: [{ name: lang.CONNECTING_TO_ENGINE, type: ActivityType.Watching }],
