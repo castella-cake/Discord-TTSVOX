@@ -14,11 +14,12 @@ TTSVOXは、Node.jsとDiscord.jsを用いて開発されたDiscord用のVOICEVOX
 - [x] 個人簡易辞書機能
 - [x] サーバー毎簡易辞書機能
 - [x] 読み上げキューが多い場合に速読する
+- [x] 優先ホスト機能
 
 # Quick start
 このリポジトリにVOICEVOXエンジンは含まれていません。各自でダウンロードする必要があります。   
 Botを実行する前に、VOICEVOXエンジンをバックグラウンドで起動させておいてください。
-`config_sample.json`を`config.json`の名称でコピー。コピーしたJSONの`bot_token`にBotのトークンを入力します。`temp`フォルダーがない場合は作成してください。   
+`config_sample.json`を`config.json`の名称でコピー。コピーしたJSONの`bot_token`にBotのトークンを入力します。 
 VOICEVOXエンジンをホストにインストールして、ポートやアドレスなどに変更がある場合はコンフィグの`voicevox_host`に書き込んでください。   
 そうしたら、Node.jsとNPMをインストールした状態で、   
 ```
@@ -47,7 +48,8 @@ npm run start
 - `voicevox_host`: 使用するVOICEVOXエンジンのアドレス
 - `voicevox_preferhost`: 優先するVOICEVOXエンジンのアドレス    
 ここに別のVOICEVOXエンジンへのアドレスを記述すると、利用可能な場合に`voicevox_host`の代わりに利用します。    
-優先ホストと通常ホストのバージョンは一致している必要があります。
+常時稼働させるサーバーがVOICEVOXを実行するのに時間がかかる場合で、高速にVOICEVOXを実行できるメインPCがある場合に便利です。    
+優先ホストと通常ホストのバージョンは一致している必要があります。    
 よくわからなければ、`""`のままにしておいてください
 - `host_timeout`: VOICEVOXエンジンのタイムアウト(ms)    
 現状は優先ホストへの接続確認に使用されます。
