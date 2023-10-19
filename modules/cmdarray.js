@@ -131,8 +131,8 @@ const cmdArray = [
                     },
                     {
                         type: ApplicationCommandOptionType.Boolean,
-                        name: "noephemeral",
-                        description: "自分以外にも表示するかどうか(何も指定しない場合は「True」)",
+                        name: "ephemeral",
+                        description: "自分にのみ表示するかどうか(何も指定しない場合は「True」)",
                         required: false
                     }
                 ],

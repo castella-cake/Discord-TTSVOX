@@ -344,7 +344,7 @@ client.on("interactionCreate", async (interaction) => {
             }
         } else if (interaction.options.getSubcommand() === 'dictshow') {
             let listTextArray = []
-            let ephemeralStat = !interaction.options.getBoolean("noephemeral") ?? true
+            let ephemeralStat = interaction.options.getBoolean("ephemeral") ?? true
             let id = interaction.member.id
             let typetext = "個人"
             //console.log(interaction.options.getBoolean("noephemeral"))
