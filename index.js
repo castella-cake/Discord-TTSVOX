@@ -1,10 +1,10 @@
 const { Client, GatewayIntentBits, Partials, ChannelType, ApplicationCommandOptionType, ActivityType, ActionRowBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, InteractionType, PermissionFlagsBits, PermissionsBitField } = require('discord.js');
 const { joinVoiceChannel, getVoiceConnection, createAudioPlayer, createAudioResource, AudioPlayerStatus } = require('@discordjs/voice');
-const { bot_token, voicevox_host, database_host, fastforwardqueue, fastforwardspeed, owner_userid, language_file } = require('./config.json');
+const { bot_token, voicevox_host, database_host, fastforwardqueue, fastforwardspeed, owner_userid, language_file, voicevox_preferhost } = require('./config.json');
 const lang = require('./langs/' + language_file);
 const { cmdArray } = require('./modules/cmdarray.js');
-const { synthesisRequest } = require('./modules/synthesis.js')
-const { getUserData, setUserData, getServerData, setServerData } = require('./modules/dbcontrol.js')
+const { synthesisRequest, IsActiveHost } = require('./modules/engineControl.js')
+const { getUserData, setUserData, getServerData, setServerData, getDataBase } = require('./modules/dbcontrol.js')
 const fs = require("fs");
 const Keyv = require('keyv');
 const { parse } = require('path');
@@ -157,7 +157,7 @@ client.on("interactionCreate", async (interaction) => {
                 }
             }
             await interaction.reply(message);
-        } else if (interaction.options.getSubcommand() === 'setvoice') {
+        } else if (interaction.options.getSubcommand() === 'chgvoice') {
             /*const row = new ActionRowBuilder()
                 .addComponents(selectspeakersmenu);
             await interaction.reply({
@@ -165,30 +165,60 @@ client.on("interactionCreate", async (interaction) => {
                 components: [row],
                 ephemeral: true
             });*/
+            // 話者がそもそも存在しない場合は突っぱねる
             if (speakersnamearray.includes(interaction.options.getString("speakername"))) {
-                const speakerobj = speakersdata.find(elem => elem.name === interaction.options.getString("speakername"))
-                const styleselectarray = []
-                Promise.all(speakerobj.styles.map(elem => {
-                    styleselectarray.push(new StringSelectMenuOptionBuilder()
-                        .setLabel(elem.name)
-                        .setValue(`${elem.id}`)
-                    )
-                })).then(async () => {
-                    const select = new StringSelectMenuBuilder()
-                        .setCustomId('setspeakerid')
-                        .setPlaceholder(lang.SPEAKER_STYLE)
-                        .addOptions(styleselectarray);
-                    const row = new ActionRowBuilder()
-                        .addComponents(select);
-                    await interaction.reply({
-                        content: `スタイル${lang.Q_SELECT}`,
-                        components: [row],
-                        ephemeral: true
-                    })
-                })
+                // speakerstyleが指定されたならそれを使う
+                if ( interaction.options.getString("speakerstyle") ) {
+                    // その話者を取得したspeakersから検索
+                    const speakerobj = speakersdata.find(elem => elem.name === interaction.options.getString("speakername"))
+                    // 検索結果からスタイルを検索
+                    const styleobj = speakerobj.styles.find(elem => elem.name === interaction.options.getString("speakerstyle"))
+                    // 検索結果があるならそのまま使用して、ないなら突っぱねる
+                    if ( styleobj ) {
+                        const memberId = interaction.member.id
+                        getUserData(memberId).then(async data => {
+                            let moddedUserData = JSON.parse(JSON.stringify(data))
+                            moddedUserData.speakerId = styleobj.id
+                            setUserData(memberId, moddedUserData)
+                            await interaction.reply({
+                                content: lang.SAVE_SUCCESS,
+                                ephemeral: true
+                            });
+                        })
+                    } else {
+                        const stylelist = speakerobj.styles.map(elem => { return elem.name })
+                        await interaction.reply({
+                            content: `${lang.STYLE_NOT_FOUND}${stylelist.join(", ")}`,
+                            ephemeral: true
+                        });
+                    }
+                } else {
+                    // その話者を取得したspeakersから検索
+                    const speakerobj = speakersdata.find(elem => elem.name === interaction.options.getString("speakername"))
+                    const styleselectarray = []
+                    Promise.all(speakerobj.styles.map(elem => {
+                        styleselectarray.push(new StringSelectMenuOptionBuilder()
+                            .setLabel(elem.name)
+                            .setValue(`${elem.id}`)
+                        )
+                    })).then(async () => {
+                        const select = new StringSelectMenuBuilder()
+                            .setCustomId('setspeakerid')
+                            .setPlaceholder(lang.SPEAKER_STYLE)
+                            .addOptions(styleselectarray);
+                        const row = new ActionRowBuilder()
+                            .addComponents(select);
+                        await interaction.reply({
+                            content: `スタイル${lang.Q_SELECT}`,
+                            components: [row],
+                            ephemeral: true
+                        })
+                    }) 
+                }
+
             } else {
                 await interaction.reply({
-                    content: `${SPEAKER_NOT_FOUND}${speakersnamearray.join(',')}`,
+                    content: `${lang.SPEAKER_NOT_FOUND}${speakersnamearray.join(',')}`,
                     ephemeral: true
                 });
             }
@@ -197,7 +227,7 @@ client.on("interactionCreate", async (interaction) => {
                 content: `VOICEVOX: ${speakersnamearray.join(',')}`,
                 ephemeral: true
             });
-        } else if (interaction.options.getSubcommand() === 'setvoiceoption') {
+        } else if (interaction.options.getSubcommand() === 'chgvoiceoption') {
             const memberId = interaction.member.id
             if (interaction.options.getString("voiceoption") === "speedScale" && ( interaction.options.getNumber("optionvalue") > 2.0 || interaction.options.getNumber("optionvalue") < 0.5 )) {
                 await interaction.reply({
@@ -218,7 +248,7 @@ client.on("interactionCreate", async (interaction) => {
                 });
                 return;
             }
-            getUserData(memberId).then(async data => {
+            getDataBase("user", memberId).then(async data => {
                 let moddedUserData = JSON.parse(JSON.stringify(data))
                 moddedUserData[interaction.options.getString("voiceoption")] = interaction.options.getNumber("optionvalue")
                 setUserData(memberId, moddedUserData)
@@ -229,19 +259,19 @@ client.on("interactionCreate", async (interaction) => {
                 });
             })
         // TODO: この辺はfunctionにまとめて、できる限り複製されたコードをなくす
-        } else if (interaction.options.getSubcommand() === 'addtodict') {
+        } else if (interaction.options.getSubcommand() === 'dictadd') {
             if (interaction.options.getString("controldict") == "server" ) {
                 // このインタラクションをしたギルドIDを取得
                 const guildId = interaction.guild.id
                 // ユーザーデータのテーブルからギルドID名の行を取得
                 getServerData(guildId).then(async data => {
                     let moddedGuildData = JSON.parse(JSON.stringify(data))
-                    moddedGuildData.serverDict.push({ from: interaction.options.getString("dictreplacefrom"), to: interaction.options.getString("dictreplaceto") })
+                    moddedGuildData.dict.push({ from: interaction.options.getString("dictreplacefrom"), to: interaction.options.getString("dictreplaceto") })
                     setServerData(guildId, moddedGuildData)
                     console.log(`Server data modified: ${guildId}`)
                     await interaction.reply({
                         content: lang.SAVE_SUCCESS_SERVER,
-                        ephemeral: true
+                        ephemeral: false
                     });
                 })
             } else {
@@ -250,7 +280,7 @@ client.on("interactionCreate", async (interaction) => {
                 // ユーザーデータのテーブルからメンバーID名の行を取得
                 getUserData(memberId).then(async data => {
                     let moddedUserData = JSON.parse(JSON.stringify(data))
-                    moddedUserData.personalDict.push({ from: interaction.options.getString("dictreplacefrom"), to: interaction.options.getString("dictreplaceto") })
+                    moddedUserData.dict.push({ from: interaction.options.getString("dictreplacefrom"), to: interaction.options.getString("dictreplaceto") })
                     setUserData(memberId, moddedUserData)
                     console.log(`User data modified: ${memberId}`)
                     await interaction.reply({
@@ -259,7 +289,7 @@ client.on("interactionCreate", async (interaction) => {
                     });
                 })
             }
-        } else if (interaction.options.getSubcommand() === 'removefromdict') {
+        } else if (interaction.options.getSubcommand() === 'dictremove') {
             if (interaction.options.getString("controldict") == "server" ) {
                 // このインタラクションをしたギルドIDを取得
                 const guildId = interaction.guild.id
@@ -267,16 +297,16 @@ client.on("interactionCreate", async (interaction) => {
                 getServerData(guildId).then(async data => {
                     let moddedGuildData = JSON.parse(JSON.stringify(data))
                     // 「お前消す」なワードのobjを探す
-                    const dictObj = moddedGuildData.serverDict.find(elem => elem.from === interaction.options.getString("deleteword"))
+                    const dictObj = moddedGuildData.dict.find(elem => elem.from === interaction.options.getString("deleteword"))
                     //console.log(dictObj)
                     if ( dictObj != undefined ) {
                         // さっき探したやつでfilter
-                        moddedGuildData.serverDict = moddedGuildData.serverDict.filter(elem => elem !== dictObj)
+                        moddedGuildData.dict = moddedGuildData.dict.filter(elem => elem !== dictObj)
                         setServerData(guildId, moddedGuildData)
                         console.log(`Server data modified: ${guildId}`)
                         await interaction.reply({
                             content: lang.SAVE_SUCCESS_SERVER,
-                            ephemeral: true
+                            ephemeral: false
                         });
                     } else {
                         await interaction.reply({
@@ -293,11 +323,11 @@ client.on("interactionCreate", async (interaction) => {
                     // 値渡し
                     let moddedUserData = JSON.parse(JSON.stringify(data))
                     // 「お前消す」なワードのobjを探す
-                    const dictobj = moddedUserData.personalDict.find(elem => elem.from === interaction.options.getString("deleteword"))
+                    const dictobj = moddedUserData.dict.find(elem => elem.from === interaction.options.getString("deleteword"))
                     //console.log(dictobj)
                     if ( dictobj != undefined ) {
                         // さっき探したやつでfilter
-                        moddedUserData.personalDict = moddedUserData.personalDict.filter(elem => elem !== dictobj)
+                        moddedUserData.dict = moddedUserData.dict.filter(elem => elem !== dictobj)
                         setUserData(memberId, moddedUserData)
                         console.log(`User data modified: ${memberId}`)
                         await interaction.reply({
@@ -312,65 +342,37 @@ client.on("interactionCreate", async (interaction) => {
                     }
                 })
             }
-        } else if (interaction.options.getSubcommand() === 'showdict') {
+        } else if (interaction.options.getSubcommand() === 'dictshow') {
             let listTextArray = []
             let ephemeralStat = !interaction.options.getBoolean("noephemeral") ?? true
+            let id = interaction.member.id
+            let typetext = "個人"
             //console.log(interaction.options.getBoolean("noephemeral"))
             if (interaction.options.getString("controldict") == "server" ) {
-                // このインタラクションをしたギルドIDを取得
-                const guildId = interaction.guild.id
-                // ユーザーデータのテーブルからギルドID名の行を取得
-                getServerData(guildId).then(async data => {
-                    let serverDict = data.serverDict
-                    if ( serverDict == null || serverDict == undefined || serverDict.length == 0 ) {
-                        await interaction.reply({
-                            content: `サーバー${lang.NO_DICT}`,
-                            ephemeral: true
-                        });
-                    } else {
-                        // 辞書のArrayでforEachしてテキストのArrayを生成する
-                        serverDict.forEach(element => {
-                            listTextArray.push(`${element.from}→${element.to}`)
-                        });
-                        // 生成したArrayをjoinして、ファイルに書き込んだら添付して送信
-                        const dictText = listTextArray.join("\n")
-                        fs.writeFile("./temp/dict.txt", dictText, async (err) => {
-                            await interaction.reply({
-                                content: `サーバー${lang.DICT_OUTPUT_TO_FILE}`,
-                                ephemeral: ephemeralStat,
-                                files: ["./temp/dict.txt"]
-                            });
-                        })
-                    }
-
-                })
-            } else {
-                // このインタラクションをしたメンバーIDを取得
-                const memberId = interaction.member.id
-                // ユーザーデータのテーブルからメンバーID名の行を取得
-                getUserData(memberId).then(async data => {
-                    let personalDict = data.personalDict
-                    if ( personalDict == null || personalDict == undefined || personalDict.length == 0 ) {
-                        await interaction.reply({
-                            content: `個人${lang.NO_DICT}`,
-                            ephemeral: true
-                        });
-                    } else {
-                        personalDict.forEach(element => {
-                            listTextArray.push(`${element.from}→${element.to}`)
-                        });
-                        const dictText = listTextArray.join("\n")
-                        fs.writeFile("./temp/dict.txt", dictText, async (err) => {
-                            await interaction.reply({
-                                content: `個人${lang.DICT_OUTPUT_TO_FILE}`,
-                                ephemeral: ephemeralStat,
-                                files: ["./temp/dict.txt"]
-                            });
-                        })
-                    }
-                    
-                })
+                id = interaction.guild.id
+                typetext = "サーバー"
             }
+            getDataBase(interaction.options.getString("controldict"), id).then(async data => {
+                let dict = data.dict
+                if ( dict == null || dict == undefined || dict.length == 0 ) {
+                    await interaction.reply({
+                        content: `${typetext}${lang.NO_DICT}`,
+                        ephemeral: true
+                    });
+                } else {
+                    personalDict.forEach(element => {
+                        listTextArray.push(`${element.from}→${element.to}`)
+                    });
+                    const dictText = listTextArray.join("\n")
+                    fs.writeFile("./temp/dict.txt", dictText, async (err) => {
+                        await interaction.reply({
+                            content: `${typetext}${lang.DICT_OUTPUT_TO_FILE}`,
+                            ephemeral: ephemeralStat,
+                            files: ["./temp/dict.txt"]
+                        });
+                    })
+                }
+            })
         } else if (interaction.options.getSubcommand() === 'owner_shutdown') {
             // このインタラクションをしたメンバーIDを取得
             const memberId = interaction.member.id
@@ -411,8 +413,8 @@ function playMessage(obj) {
         let speed = userdata.speedScale ?? 1.0
         const pitch = userdata.pitchScale ?? 0.0
         const intonation = userdata.intonationScale ?? 1.0
-        const dict = userdata.personalDict ?? []
-        const serverdict = serverdata.serverDict ?? []
+        const dict = userdata.dict ?? []
+        const serverdict = serverdata.dict ?? []
         let speakerId = userdata.speakerId ?? 0
         // ボイスオーバーライド
         /*if (obj.content.startsWith("vor?=")) {
@@ -430,7 +432,12 @@ function playMessage(obj) {
         let content = obj.content.toLowerCase()
         console.log(`Message in channel!: ${obj.content} ${userdata.speakerId} ${speed} ${pitch} ${intonation}`)
         Promise.all([ dict.map(async elem => { content = content.replaceAll(elem.from.toLowerCase(), elem.to)}), serverdict.map(async elem => { content = content.replaceAll(elem.from.toLowerCase(), elem.to)}) ]).then(async () => {
-            const audioqueryresponse = await fetch(`http://${voicevox_host}/audio_query?text=${content}&speaker=${speakerId}`, {
+            let currentHost = voicevox_host
+            const preferHostRes = await IsActiveHost(voicevox_preferhost)
+            if ( preferHostRes === true ) {
+                currentHost = voicevox_preferhost
+            }
+            const audioqueryresponse = await fetch(`http://${currentHost}/audio_query?text=${content}&speaker=${speakerId}`, {
                 method: "POST"
             })
             let queryresponse = await audioqueryresponse.text() ?? null
@@ -441,7 +448,7 @@ function playMessage(obj) {
                 parsedquery.intonationScale = intonation
                 //console.log(parsedquery)
 
-                let voiceresource = await synthesisRequest(voicevox_host, parsedquery, speakerId)
+                let voiceresource = await synthesisRequest(currentHost, parsedquery, speakerId)
                 player.play(voiceresource);
                 console.log(`再生中`)
             }

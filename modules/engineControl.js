@@ -1,5 +1,34 @@
+const { host_timeout } = require('../config.json');
 const { createAudioResource } = require('@discordjs/voice');
 const fs = require("fs");
+
+function IsActiveHost(host) {
+    return new Promise(async (resolve, reject) => {
+        try {
+            if ( host === "" ) {
+                resolve(false)
+            } else {
+                const controller = new AbortController()
+                await setTimeout(() => controller.abort(), host_timeout)
+                fetch(`http://${host}/version`, {
+                    method: "GET",
+                    signal: controller.signal
+                }).then(response => {
+                    if ( response.status == 200 ) {
+                        resolve(true)
+                    } else {
+                        resolve(response.status)
+                    }
+                }).catch((err) => {
+                    resolve(err)
+                })
+            }
+
+        } catch (err) {
+            resolve(err)
+        }
+    })
+}
 
 function synthesisRequest(host, body, speakerId) {
     return new Promise((resolve,reject) => {
@@ -30,9 +59,15 @@ function synthesisRequest(host, body, speakerId) {
                     reject(res)
                 })
             }
+        }).catch((err) => {
+            console.log(`VOICEVOXの呼び出しに失敗: ${err}`)
+            response.text().then(res => {
+                console.log(res)
+                reject(res)
+            })
         })
     })
 }
 
 
-module.exports = { synthesisRequest }
+module.exports = { synthesisRequest, IsActiveHost }

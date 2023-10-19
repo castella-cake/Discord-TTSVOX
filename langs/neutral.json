@@ -14,6 +14,7 @@
     "Q_SELECT": "を選択",
     "SPEAKER_STYLE": "話者のスタイル",
     "SPEAKER_NOT_FOUND": "指定された話者名が見つかりませんでした。\n利用可能な話者: ",
+    "STYLE_NOT_FOUND": "指定されたスタイル名が見つかりませんでした。\n利用可能なスタイル: ",
     "SHOULD_WITHIN": "以内で指定する必要があります。",
     "WORD_NOT_FOUND": "指定されたワードが見つかりませんでした。",
     "SAVE_SUCCESS": "変更を保存しました。",

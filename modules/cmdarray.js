@@ -22,8 +22,8 @@ const cmdArray = [
             },
             {
                 type: ApplicationCommandOptionType.Subcommand,
-                name: `setvoice`,
-                description: "話者を変更します。実行すると、スタイルの選択パネルが表示されます。設定はあなた以外には見えません。",
+                name: `chgvoice`,
+                description: "話者を変更します。スタイルを入力せずに実行すると、スタイルの選択パネルが表示されます。設定はあなた以外には見えません。",
                 options: [{
                     type: ApplicationCommandOptionType.String,
                     name: "speakername",
@@ -39,7 +39,7 @@ const cmdArray = [
             },
             {
                 type: ApplicationCommandOptionType.Subcommand,
-                name: `setvoiceoption`,
+                name: `chgvoiceoption`,
                 description: "ボイスの話速などを変更します。",
                 options: [
                     {
@@ -63,7 +63,7 @@ const cmdArray = [
             },
             {
                 type: ApplicationCommandOptionType.Subcommand,
-                name: `addtodict`,
+                name: `dictadd`,
                 description: "個人辞書/サーバー辞書にルールを追加します。",
                 options: [
                     {
@@ -92,7 +92,7 @@ const cmdArray = [
             },
             {
                 type: ApplicationCommandOptionType.Subcommand,
-                name: `removefromdict`,
+                name: `dictremove`,
                 description: "個人辞書/サーバー辞書からルールを削除します。",
                 options: [
                     {
@@ -115,7 +115,7 @@ const cmdArray = [
             },
             {
                 type: ApplicationCommandOptionType.Subcommand,
-                name: `showdict`,
+                name: `dictshow`,
                 description: "個人辞書/サーバー辞書の内容を表示します。",
                 options: [
                     {

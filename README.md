@@ -45,7 +45,14 @@ npm run start
         - `from`: 置き換え元文字列
         - `to`: 置き換え先文字列
 - `voicevox_host`: 使用するVOICEVOXエンジンのアドレス
+- `voicevox_preferhost`: 優先するVOICEVOXエンジンのアドレス    
+ここに別のVOICEVOXエンジンへのアドレスを記述すると、利用可能な場合に`voicevox_host`の代わりに利用します。    
+優先ホストと通常ホストのバージョンは一致している必要があります。
+よくわからなければ、`""`のままにしておいてください
+- `host_timeout`: VOICEVOXエンジンのタイムアウト(ms)    
+現状は優先ホストへの接続確認に使用されます。
 - `database_host`: 使用するSQLiteデータベースのアドレス
-- `fastforwardqueue`: キューされたメッセージが設定された値以上に多い場合に速読を有効化します。0で無効化
-- `fastforwardspeed`: 速読が有効化された場合のスピード
+複数のTTSVOXをホストする場合は、SQLiteデータベースのサーバーを一つホストすることで設定を共有できます。
+- `fastforwardqueue`: キューされたメッセージが設定された値以上の場合に速読を有効化します。0で無効化
+- `fastforwardspeed`: 速読が有効化された場合の話速
 - `owner_userid`: BotのオーナーのユーザーID
