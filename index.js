@@ -431,25 +431,28 @@ function playMessage(obj) {
         console.log(`Message in channel!: ${obj.content} ${userdata.speakerId} ${speed} ${pitch} ${intonation}`)
         Promise.all([ dict.map(async elem => { content = content.replaceAll(elem.from.toLowerCase(), elem.to)}), serverdict.map(async elem => { content = content.replaceAll(elem.from.toLowerCase(), elem.to)}) ]).then(async () => {
             let currentHost = voicevox_host
-            const preferHostRes = await IsActiveHost(voicevox_preferhost)
-            if ( preferHostRes === true ) {
-                currentHost = voicevox_preferhost
-            }
-            const audioqueryresponse = await fetch(`http://${currentHost}/audio_query?text=${content}&speaker=${speakerId}`, {
-                method: "POST"
+            IsActiveHost(voicevox_preferhost).then(async (result) => {
+                if ( result === true ) {
+                    currentHost = voicevox_preferhost
+                    console.log("優先ホストが使用されます")
+                }
+                const audioqueryresponse = await fetch(`http://${currentHost}/audio_query?text=${content}&speaker=${speakerId}`, {
+                    method: "POST"
+                })
+                let queryresponse = await audioqueryresponse.text() ?? null
+                if (queryresponse) {
+                    const parsedquery = JSON.parse(queryresponse)
+                    parsedquery.speedScale = speed
+                    parsedquery.pitchScale = pitch
+                    parsedquery.intonationScale = intonation
+                    //console.log(parsedquery)
+    
+                    let voiceresource = await synthesisRequest(currentHost, parsedquery, speakerId)
+                    player.play(voiceresource);
+                    console.log(`再生中`)
+                }
             })
-            let queryresponse = await audioqueryresponse.text() ?? null
-            if (queryresponse) {
-                const parsedquery = JSON.parse(queryresponse)
-                parsedquery.speedScale = speed
-                parsedquery.pitchScale = pitch
-                parsedquery.intonationScale = intonation
-                //console.log(parsedquery)
 
-                let voiceresource = await synthesisRequest(currentHost, parsedquery, speakerId)
-                player.play(voiceresource);
-                console.log(`再生中`)
-            }
         })
     })
 }
