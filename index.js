@@ -67,15 +67,17 @@ client.once("ready", async () => {
                     activities: [{ name: lang.ENGINE_CONNECT_FAIL, type: ActivityType.Watching }],
                     status: 'dnd',
                 });
-                console.log(`重大なエラー: VOICEVOXエンジンの呼び出しに失敗しました。ステータスコードは ${response.status} でした。`)
+                console.error(`VOICEVOXエンジンの呼び出しに失敗しました。ステータスコードは ${response.status} でした。`)
             }
+        }).catch((err) => {
+            throw err
         })
     } catch (error) {
         client.user.setPresence({
             activities: [{ name: lang.ENGINE_CONNECT_FAIL, type: ActivityType.Watching }],
             status: 'dnd',
         });
-        console.log(`重大なエラー: VOICEVOXエンジンの呼び出しに失敗しました。:${error}`)
+        console.error(`VOICEVOXエンジンの呼び出しに失敗しました。:${error}`)
     }
     
 });
@@ -438,6 +440,8 @@ function playMessage(obj) {
                 }
                 const audioqueryresponse = await fetch(`http://${currentHost}/audio_query?text=${content}&speaker=${speakerId}`, {
                     method: "POST"
+                }).catch((err) => {
+                    console.log(err)
                 })
                 let queryresponse = await audioqueryresponse.text() ?? null
                 if (queryresponse) {
