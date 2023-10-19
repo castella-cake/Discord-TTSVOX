@@ -358,7 +358,7 @@ client.on("interactionCreate", async (interaction) => {
                         ephemeral: true
                     });
                 } else {
-                    personalDict.forEach(element => {
+                    dict.forEach(element => {
                         listTextArray.push(`${element.from}→${element.to}`)
                     });
                     const dictText = listTextArray.join("\n")
