@@ -1,8 +1,9 @@
 const { ApplicationCommandOptionType } = require('discord.js');
+const { slashcommand_prefix } = require('../config.json');
 
 const cmdArray = [
     {
-        name: "ttsvox",
+        name: slashcommand_prefix,
         description: "TTSVOXのコマンド。",
         options: [
             {
@@ -145,6 +146,11 @@ const cmdArray = [
                 type: ApplicationCommandOptionType.Subcommand,
                 name: `credit`,
                 description: "クレジットを表示します。"
+            },
+            {
+                type: ApplicationCommandOptionType.Subcommand,
+                name: `myinfo`,
+                description: "自分の現在の情報、"
             }
         ]
     }

@@ -9,5 +9,6 @@
     "fastforwardqueue": 3,
     "fastforwardspeed": 1.8,
     "owner_userid": "0",
-    "language_file": "neutral.json"
+    "language_file": "neutral.json",
+    "slashcommand_prefix": "ttsvox"
 }

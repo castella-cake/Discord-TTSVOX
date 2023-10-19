@@ -113,14 +113,18 @@ client.on("interactionCreate", async (interaction) => {
         } else if (interaction.options.getSubcommand() === 'ping') {
             await interaction.reply(lang.PONG);
         } else if (interaction.options.getSubcommand() === 'join') {
+            // ギルドと実行したメンバーとそのメンバーが居るチャンネル
             const guild = interaction.guild;
             const member = await guild.members.fetch(interaction.member.id);
             const memberVC = member.voice.channel;
+            // これらが実行されなかったら「ありえないエラーです」
             let message = lang.ERROR
+            // チャンネルが存在しない、参加できない、発言できない場合は突っぱねる
             if (!memberVC || !memberVC.joinable || !memberVC.speakable) {
                 console.log("Voice connection check failed")
                 message = lang.VC_JOIN_FAIL
             } else if ( !interaction.guild.members.me.voice.channel ) {
+                // どこにも参加していないなら現在のチャンネルIDを記録して接続し、プレイヤーをサブスクライブ
                 console.log(interaction.channel)
                 currenttextchannelid = interaction.channel.id
                 currentvoicechannelid = memberVC.id
@@ -135,6 +139,7 @@ client.on("interactionCreate", async (interaction) => {
                 message = lang.JOIN
                 speakqueuearray = []
             } else {
+                // すでに参加しているなら突っぱねる
                 message = lang.ALREADY_JOINED
             }
             await interaction.reply(message);
@@ -158,13 +163,6 @@ client.on("interactionCreate", async (interaction) => {
             }
             await interaction.reply(message);
         } else if (interaction.options.getSubcommand() === 'chgvoice') {
-            /*const row = new ActionRowBuilder()
-                .addComponents(selectspeakersmenu);
-            await interaction.reply({
-                content: 'ボイスを選択',
-                components: [row],
-                ephemeral: true
-            });*/
             // 話者がそもそも存在しない場合は突っぱねる
             if (speakersnamearray.includes(interaction.options.getString("speakername"))) {
                 // speakerstyleが指定されたならそれを使う
