@@ -146,6 +146,11 @@ const cmdArray = [
                 type: ApplicationCommandOptionType.Subcommand,
                 name: `credit`,
                 description: "クレジットを表示します。"
+            },
+            {
+                type: ApplicationCommandOptionType.Subcommand,
+                name: `help`,
+                description: "コマンドリストを表示します。"
             }
         ]
     }

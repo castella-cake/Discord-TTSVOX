@@ -97,6 +97,7 @@ client.on("interactionCreate", async (interaction) => {
             return;
         }
         if (interaction.isStringSelectMenu()) {
+            // ボイスチェンジの「スタイル選択」からスタイルが選択された時に発火する
             if (interaction.customId === 'setspeakerid') {
                 const memberId = interaction.member.id
                 getUserData(memberId).then(async data => {
@@ -111,6 +112,7 @@ client.on("interactionCreate", async (interaction) => {
                 })
             }
         } else if ( !interaction.options.getSubcommand() ) {
+            // サブコマンドじゃなければ終わり
             await interaction.update({
                 content: lang.ERROR,
                 ephemeral: true,
@@ -118,6 +120,8 @@ client.on("interactionCreate", async (interaction) => {
             });
         } else if (interaction.options.getSubcommand() === 'ping') {
             await interaction.reply(lang.PONG);
+        } else if (interaction.options.getSubcommand() === 'help') {
+            await interaction.reply(lang.HELP);
         } else if (interaction.options.getSubcommand() === 'join') {
             // ギルドと実行したメンバーとそのメンバーが居るチャンネル
             const guild = interaction.guild;
