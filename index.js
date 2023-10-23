@@ -8,12 +8,14 @@ const { getUserData, setUserData, getServerData, setServerData, getDataBase } = 
 const fs = require("fs");
 const Keyv = require('keyv');
 const { parse } = require('path');
+const packageInfo = require('./package.json');
 const userdata = new Keyv(database_host, { table: 'userobj' })
 const serverdata = new Keyv(database_host, { table: 'serverobj' })
 
 const client = new Client({ intents: [ GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates, GatewayIntentBits.GuildMessages, GatewayIntentBits.GuildMembers, GatewayIntentBits.MessageContent ], partials: [Partials.Channel] });
 
 userdata.on('error', err => console.error('Keyv connection error:', err))
+serverdata.on('error', err => console.error('Keyv connection error:', err))
 
 let isready = false
 let speakersdata = []
@@ -88,7 +90,6 @@ client.once("ready", async () => {
 
 // num
 let currenttextchannelid
-let currentvoicechannelid
 
 client.on("interactionCreate", async (interaction) => {
     try {
@@ -137,7 +138,6 @@ client.on("interactionCreate", async (interaction) => {
                 // どこにも参加していないなら現在のチャンネルIDを記録して接続し、プレイヤーをサブスクライブ
                 console.log(interaction.channel)
                 currenttextchannelid = interaction.channel.id
-                currentvoicechannelid = memberVC.id
                 const connection = joinVoiceChannel({
                     guildId: guild.id,
                     channelId: memberVC.id,
@@ -157,21 +157,29 @@ client.on("interactionCreate", async (interaction) => {
             const guild = interaction.guild;
             const member = await guild.members.fetch(interaction.member.id);
             const memberVC = member.voice.channel;
-            let message = lang.VC_JOIN_ERROR
-            if (!memberVC || !memberVC.joinable || !memberVC.speakable) {
+            let message = lang.VC_JOIN_ERROR;
+            //console.log(interaction.guild.members.me.voice.channel.id)
+            if (!interaction.guild.members.me.voice.channel) { 
+                message = lang.VC_DISCONNECT_NO_CHANNEL;
+            } else if (memberVC.id !== interaction.guild.members.me.voice.channel.id) {
+                message = lang.VC_DISCONNECT_WRONG_CHANNEL;
+            }  else if ( !memberVC || !memberVC.joinable || !memberVC.speakable ) {
                 console.log("Voice connection check failed")
-                message = lang.VC_DISCONNECT_FAIL
+                message = lang.VC_DISCONNECT_FAIL;
             } else {
                 const connection = getVoiceConnection(memberVC.guild.id);
-                //console.log(connection)
+                console.log(connection)
                 if (connection !== undefined) {
                     currenttextchannelid = null
-                    currentvoicechannelid = null
                     connection.destroy();
-                    message = lang.VC_DISCONNECTED
+                    message = lang.VC_DISCONNECTED;
                 }
             }
-            await interaction.reply(message);
+            //console.log(message)
+            await interaction.reply({
+                content: message,
+                ephemeral: false
+            });
         } else if (interaction.options.getSubcommand() === 'chgvoice') {
             // 話者がそもそも存在しない場合は突っぱねる
             if (speakersnamearray.includes(interaction.options.getString("speakername"))) {
@@ -232,7 +240,7 @@ client.on("interactionCreate", async (interaction) => {
             }
         } else if (interaction.options.getSubcommand() === 'credit') {
             await interaction.reply({
-                content: `VOICEVOX: ${speakersnamearray.join(',')}`,
+                content: `TTSVOX v${packageInfo.version}\nリポジトリ: <${packageInfo.homepage}>\n\nVOICEVOX: ${speakersnamearray.join(',')}`,
                 ephemeral: true
             });
         } else if (interaction.options.getSubcommand() === 'chgvoiceoption') {
@@ -446,7 +454,7 @@ function playMessage(obj) {
                     currentHost = voicevox_preferhost
                     console.log("優先ホストが使用されます")
                 }
-                const audioqueryresponse = await fetch(`http://${currentHost}/audio_query?text=${content}&speaker=${speakerId}`, {
+                const audioqueryresponse = await fetch(`http://${currentHost}/audio_query?text=${encodeURIComponent(content)}&speaker=${encodeURIComponent(speakerId)}`, {
                     method: "POST"
                 }).catch((err) => {
                     console.log(err)
@@ -485,7 +493,7 @@ client.on('messageCreate', message => {
     //console.log(`Message coming: ${message.content}`)
 });
 
-client.on('voiceStateUpdate', (oldstate, newstate) => {
+client.on('voiceStateUpdate', async (oldstate, newstate) => {
     if (oldstate.channelId === newstate.channelId) {
         return;
     }
@@ -493,7 +501,9 @@ client.on('voiceStateUpdate', (oldstate, newstate) => {
         console.log("It's all connected!" + newstate.channel.members.size)
     } else if (oldstate.channelId !== null && newstate.channelId === null) {
         console.log("It's all disconnected!")
-        if (oldstate.channel.members.size < 2 && oldstate.channelId === currentvoicechannelid) {
+        const currentGuild = await client.guilds.cache.get(oldstate.guild.id)
+        //console.log(currentGuild)
+        if (oldstate.channel.members.size < 2 && currentGuild.members.me.voice.channel && oldstate.channelId === currentGuild.members.me.voice.channel.id) {
             const connection = getVoiceConnection(oldstate.guild.id);
             //console.log(connection)
             if (connection !== undefined) {
@@ -503,7 +513,6 @@ client.on('voiceStateUpdate', (oldstate, newstate) => {
                 }
                 connection.destroy();
                 currenttextchannelid = null
-                currentvoicechannelid = null
             }
         }
     }

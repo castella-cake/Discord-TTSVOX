@@ -9,7 +9,7 @@ const cmdArray = [
             {
                 type: ApplicationCommandOptionType.Subcommand,
                 name: `ping`,
-                description: "Replies with Pong!",
+                description: "Pongで返答します",
             },
             {
                 type: ApplicationCommandOptionType.Subcommand,
@@ -145,7 +145,7 @@ const cmdArray = [
             {
                 type: ApplicationCommandOptionType.Subcommand,
                 name: `credit`,
-                description: "クレジットを表示します。"
+                description: "TTSVOXとVOICEVOXのクレジットを表示します。"
             },
             {
                 type: ApplicationCommandOptionType.Subcommand,

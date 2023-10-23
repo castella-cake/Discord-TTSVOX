@@ -1,6 +1,6 @@
 {
   "name": "discord-ttsvox",
-  "version": "0.0.2",
+  "version": "0.1.1",
   "description": "Discord VOICEVOX TTSBot",
   "main": "index.js",
   "scripts": {
@@ -15,7 +15,7 @@
   "bugs": {
     "url": "https://github.com/castella-cake/Discord-TTSVOX/issues"
   },
-  "homepage": "https://github.com/castella-cake/Discord-TTSVOX#readme",
+  "homepage": "https://github.com/castella-cake/Discord-TTSVOX",
   "dependencies": {
     "@discordjs/voice": "^0.16.0",
     "@keyv/sqlite": "^3.6.5",

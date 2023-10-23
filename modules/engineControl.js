@@ -32,7 +32,7 @@ function IsActiveHost(host) {
 
 function synthesisRequest(host, body, speakerId) {
     return new Promise((resolve,reject) => {
-        fetch(`http://${host}/synthesis?speaker=${speakerId}`, {
+        fetch(`http://${host}/synthesis?speaker=${encodeURIComponent(speakerId)}`, {
             method: "POST",
             headers: {"Content-Type": "application/json", "accept": "audio/wav"},
             body: JSON.stringify(body)
