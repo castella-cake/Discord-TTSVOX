@@ -173,6 +173,17 @@ const cmdArray = [
             },
             {
                 type: ApplicationCommandOptionType.Subcommand,
+                name: `showmysettings`,
+                description: "現在のボイス設定,ボイスパラメータ,ボイスオーバーライド設定を表示します。辞書はshowdictから確認できます。",
+                options: [{
+                    type: ApplicationCommandOptionType.Boolean,
+                    name: "ephemeral",
+                    description: "自分にのみ表示するかどうか(何も指定しない場合は「True」)",
+                    required: false
+                }],
+            },
+            {
+                type: ApplicationCommandOptionType.Subcommand,
                 name: `owner_shutdown`,
                 description: "Botのオーナーのみが使用可能: クライアントを破壊してBotを安全に停止します。(現在の非同期処理は全て強制終了されます)"
             },

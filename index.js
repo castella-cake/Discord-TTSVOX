@@ -1,6 +1,6 @@
 const { Client, GatewayIntentBits, Partials, ChannelType, ApplicationCommandOptionType, ActivityType, ActionRowBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, InteractionType, PermissionFlagsBits, PermissionsBitField } = require('discord.js');
 const { joinVoiceChannel, getVoiceConnection, createAudioPlayer, createAudioResource, AudioPlayerStatus } = require('@discordjs/voice');
-const { bot_token, voicevox_host, database_host, fastforwardqueue, fastforwardspeed, owner_userid, language_file, voicevox_preferhost, noread_prefix } = require('./config.json');
+const { bot_token, voicevox_host, database_host, fastforwardqueue, fastforwardspeed, owner_userid, language_file, voicevox_preferhost, noread_prefix, initial_userdata } = require('./config.json');
 const lang = require('./langs/' + language_file);
 const { cmdArray } = require('./modules/cmdarray.js');
 const { synthesisRequest, IsActiveHost } = require('./modules/engineControl.js')
@@ -350,7 +350,7 @@ client.on("interactionCreate", async (interaction) => {
                     setServerData(guildId, moddedGuildData)
                     console.log(`Server data modified: ${guildId}`)
                     await interaction.reply({
-                        content: lang.SAVE_SUCCESS_SERVER,
+                        content: lang.SAVE_SUCCESS_SERVER + "`" + interaction.options.getString("dictreplacefrom") + "` を `" + interaction.options.getString("dictreplaceto") + "` へ置き換えるよう" + lang.CONFIGURED,
                         ephemeral: false
                     });
                 })
@@ -364,7 +364,7 @@ client.on("interactionCreate", async (interaction) => {
                     setUserData(memberId, moddedUserData)
                     console.log(`User data modified: ${memberId}`)
                     await interaction.reply({
-                        content: lang.SAVE_SUCCESS,
+                        content: lang.SAVE_SUCCESS + "`" + interaction.options.getString("dictreplacefrom") + "` を `" + interaction.options.getString("dictreplaceto") + "` へ置き換えるよう" + lang.CONFIGURED,
                         ephemeral: true
                     });
                 })
@@ -479,6 +479,30 @@ client.on("interactionCreate", async (interaction) => {
             await interaction.reply({
                 content: `TTSVOX v${packageInfo.version}\nリポジトリ: <${packageInfo.homepage}>\n\nVOICEVOX: ${speakersnamearray.join(',')}`,
                 ephemeral: true
+            });
+        } else if (interaction.options.getSubcommand() === 'showmysettings') {
+            const memberId = interaction.member.id
+            const data = await getDataBase("user", memberId)
+            const ephemeral = interaction.options.getBoolean("ephemeral") ?? true
+
+            const speakerId = data.speakerId ?? initial_userdata.speakerId
+            const speedScale = data.speedScale ?? initial_userdata.speedScale
+            const pitchScale = data.pitchScale ?? initial_userdata.pitchScale
+            const intonationScale = data.intonationScale ?? initial_userdata.intonationScale
+            const vorSettings = data.vorSettings ?? {}
+
+            let vorSettingsText = "ボイスオーバーライド: 割り当てなし"
+            if ( Object.keys(vorSettings).length > 0 ) { 
+                vorSettingsText = "ボイスオーバーライド(" + Object.keys(vorSettings).length + "個の割り当て): \n```\n" + Object.keys(vorSettings).slice(0,10).map(elem => elem + " => " + speakerIdInfoObj[vorSettings[elem]].speakerName + " " + speakerIdInfoObj[vorSettings[elem]].styleName).join("\n") + "\n```(最初の10個を表示)"
+            }
+
+            const text = "**" + interaction.member.displayName + " さんの設定**\n" + 
+            "使用中の話者: " + speakerIdInfoObj[speakerId].speakerName + " " + speakerIdInfoObj[speakerId].styleName + "\n" + 
+            "話速: " + speedScale  + " / ピッチ: " + pitchScale + " / 抑揚: " + intonationScale + "\n\n" + 
+            vorSettingsText;
+            await interaction.reply({
+                content: text,
+                ephemeral: ephemeral
             });
         } else {
             await interaction.reply('Invalid Command.....');
