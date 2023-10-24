@@ -23,6 +23,7 @@ let isready = false
 let speakersdata = []
 const player = createAudioPlayer();
 let speakersnamearray = []
+let speakerIdInfoObj = {}
 let speakqueuearray = []
 let isBusy = false
 
@@ -60,6 +61,11 @@ client.once("ready", async () => {
                         response.text().then(data => {
                             speakersdata = JSON.parse(data)
                             speakersnamearray = speakersdata.map( elem => elem.name )
+                            speakersdata.map( elem => {
+                                elem.styles.map( selem => {
+                                    speakerIdInfoObj[selem.id] = { styleName: selem.name, speakerName: elem.name, speakerUUID: elem.speaker_uuid }
+                                } )
+                            } )
                             // isreadyを立ててコマンドの受付を開始する
                             client.user.setPresence({
                                 activities: [{ name: lang.READY, type: ActivityType.Playing }],
@@ -233,18 +239,65 @@ client.on("interactionCreate", async (interaction) => {
                         })
                     }) 
                 }
-
             } else {
                 await interaction.reply({
                     content: `${lang.SPEAKER_NOT_FOUND}${speakersnamearray.join(',')}`,
                     ephemeral: true
                 });
             }
-        } else if (interaction.options.getSubcommand() === 'credit') {
-            await interaction.reply({
-                content: `TTSVOX v${packageInfo.version}\nリポジトリ: <${packageInfo.homepage}>\n\nVOICEVOX: ${speakersnamearray.join(',')}`,
-                ephemeral: true
-            });
+        } else if (interaction.options.getSubcommand() === 'voiceprefixassign') {
+            // 話者がそもそも存在しない場合は突っぱねる
+            if (speakersnamearray.includes(interaction.options.getString("speakername"))) {
+                // その話者を取得したspeakersから検索
+                const speakerobj = speakersdata.find(elem => elem.name === interaction.options.getString("speakername"))
+                // 検索結果からスタイルを検索
+                const styleobj = speakerobj.styles.find(elem => elem.name === interaction.options.getString("speakerstyle"))
+                // 検索結果があるならそのまま使用して、ないなら突っぱねる
+                if ( styleobj ) {
+                    const memberId = interaction.member.id
+                    getUserData(memberId).then(async data => {
+                        let moddedUserData = JSON.parse(JSON.stringify(data))
+                        // あるならそれを使い、ないなら空のObj
+                        const vorObj = moddedUserData.vorSettings ?? {}
+                        vorObj[interaction.options.getString("assignprefix")] = styleobj.id
+                        moddedUserData.vorSettings = vorObj
+                        setUserData(memberId, moddedUserData)
+                        await interaction.reply({
+                            content: lang.SAVE_SUCCESS + "プレフィックス `" + interaction.options.getString("assignprefix") + "` に 話者 **" + interaction.options.getString("speakername") + " " + interaction.options.getString("speakerstyle") + "** " + lang.ASSIGNED,
+                            ephemeral: false
+                        });
+                    })
+                } else {
+                    const stylelist = speakerobj.styles.map(elem => { return elem.name })
+                    await interaction.reply({
+                        content: `${lang.STYLE_NOT_FOUND}${stylelist.join(", ")}`,
+                        ephemeral: true
+                    });
+                }
+            } else {
+                await interaction.reply({
+                    content: `${lang.SPEAKER_NOT_FOUND}${speakersnamearray.join(',')}`,
+                    ephemeral: true
+                });
+            }
+        } else if (interaction.options.getSubcommand() === 'voiceprefixremove') {
+            const memberId = interaction.member.id
+            getUserData(memberId).then(async data => {
+                let text = lang.PREFIX_NOT_FOUND
+                let moddedUserData = JSON.parse(JSON.stringify(data))
+                // あるならそれを使い、ないなら空のObj
+                const vorObj = moddedUserData.vorSettings ?? {}
+                if ( Object.keys(vorObj).includes(interaction.options.getString("removeprefix")) ) {
+                    delete vorObj[interaction.options.getString("removeprefix")]
+                    moddedUserData.vorSettings = vorObj
+                    setUserData(memberId, moddedUserData)
+                    text = lang.SAVE_SUCCESS + "プレフィックス `" + interaction.options.getString("removeprefix") + "` への割り当て" + lang.DELETED
+                }
+                await interaction.reply({
+                    content: text,
+                    ephemeral: true
+                });
+            })
         } else if (interaction.options.getSubcommand() === 'chgvoiceoption') {
             const memberId = interaction.member.id
             if (interaction.options.getString("voiceoption") === "speedScale" && ( interaction.options.getNumber("optionvalue") > 2.0 || interaction.options.getNumber("optionvalue") < 0.5 )) {
@@ -422,6 +475,11 @@ client.on("interactionCreate", async (interaction) => {
                 });
             }
 
+        } else if (interaction.options.getSubcommand() === 'credit') {
+            await interaction.reply({
+                content: `TTSVOX v${packageInfo.version}\nリポジトリ: <${packageInfo.homepage}>\n\nVOICEVOX: ${speakersnamearray.join(',')}`,
+                ephemeral: true
+            });
         } else {
             await interaction.reply('Invalid Command.....');
         }
@@ -442,7 +500,10 @@ function playMessage(obj) {
         const intonation = userdata.intonationScale ?? 1.0
         const dict = userdata.dict ?? []
         const serverdict = serverdata.dict ?? []
+        const vorSettings = userdata.vorSettings ?? {}
+        const vorPrefixArray = Object.keys(vorSettings)
         let speakerId = userdata.speakerId ?? 0
+
         // ボイスオーバーライド
         /*if (obj.content.startsWith("vor?=")) {
             if (obj.content.indexOf("\n") !== -1) {
@@ -458,7 +519,13 @@ function playMessage(obj) {
         
         let content = obj.content.toLowerCase()
         console.log(`Message in channel!: ${obj.content} ${userdata.speakerId} ${speed} ${pitch} ${intonation}`)
-        Promise.all([ dict.map(async elem => { content = content.replaceAll(elem.from.toLowerCase(), elem.to)}), serverdict.map(async elem => { content = content.replaceAll(elem.from.toLowerCase(), elem.to)}) ]).then(async () => {
+        Promise.all([ 
+            // vorのPrefixの配列でmapして、それで始まるなら話者をそのIDに、またcontentの先頭にあるPrefixも取っ払う
+            vorPrefixArray.map(elem => { if ( content.startsWith(elem.toLowerCase()) ) { speakerId = vorSettings[elem]; content = content.replace(elem, ""); } }), 
+            // dict用
+            dict.map(async elem => { content = content.replaceAll(elem.from.toLowerCase(), elem.to)}), 
+            serverdict.map(async elem => { content = content.replaceAll(elem.from.toLowerCase(), elem.to)}) 
+        ]).then(async () => {
             let currentHost = voicevox_host
             IsActiveHost(voicevox_preferhost).then(async (result) => {
                 if ( result === true ) {
