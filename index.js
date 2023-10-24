@@ -1,6 +1,6 @@
 const { Client, GatewayIntentBits, Partials, ChannelType, ApplicationCommandOptionType, ActivityType, ActionRowBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, InteractionType, PermissionFlagsBits, PermissionsBitField } = require('discord.js');
 const { joinVoiceChannel, getVoiceConnection, createAudioPlayer, createAudioResource, AudioPlayerStatus } = require('@discordjs/voice');
-const { bot_token, voicevox_host, database_host, fastforwardqueue, fastforwardspeed, owner_userid, language_file, voicevox_preferhost } = require('./config.json');
+const { bot_token, voicevox_host, database_host, fastforwardqueue, fastforwardspeed, owner_userid, language_file, voicevox_preferhost, noread_prefix } = require('./config.json');
 const lang = require('./langs/' + language_file);
 const { cmdArray } = require('./modules/cmdarray.js');
 const { synthesisRequest, IsActiveHost } = require('./modules/engineControl.js')
@@ -11,6 +11,8 @@ const { parse } = require('path');
 const packageInfo = require('./package.json');
 const userdata = new Keyv(database_host, { table: 'userobj' })
 const serverdata = new Keyv(database_host, { table: 'serverobj' })
+const url_regex = /https?:\/\/[-A-Z0-9+&@#/%=~_|$?!:,.]*[A-Z0-9+&@#/%=~_|$]/ig;
+const spoiler_regex = /\|\|(.*?)\|\|/ig;
 
 const client = new Client({ intents: [ GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates, GatewayIntentBits.GuildMessages, GatewayIntentBits.GuildMembers, GatewayIntentBits.MessageContent ], partials: [Partials.Channel] });
 
@@ -477,17 +479,25 @@ function playMessage(obj) {
     })
 }
 
+function playOrQueue(obj) {
+    if ( player.state.status === AudioPlayerStatus.Idle && isBusy !== true ) {
+        playMessage(obj)
+    } else {
+        speakqueuearray.push(obj)
+        console.log("読み上げ中のメッセージがあったため、キューに移動しました")
+    }
+}
+
 client.on('messageCreate', message => {
     if (message.author.bot) {
         return;
     }
-    if (message.channel.id === currenttextchannelid) {
-        if ( player.state.status === AudioPlayerStatus.Idle && isBusy !== true ) {
-            playMessage({ content: message.content, memberId: message.member.id, guildId: message.guild.id })
-        } else {
-            speakqueuearray.push({ content: message.content, memberId: message.member.id, guildId: message.guild.id  })
-            console.log("読み上げ中のメッセージがあったため、キューに移動しました")
+    if ( message.channel.id === currenttextchannelid && !message.content.startsWith(noread_prefix) ) {
+        let text = message.content.replace(url_regex, "").replace(spoiler_regex, lang.SPOILER_REPLACE)
+        if ( url_regex.test(message.content) ) {
+            text = text + lang.URL_INCLUDED
         }
+        playOrQueue({ content: text, memberId: message.member.id, guildId: message.guild.id })
     }
 
     //console.log(`Message coming: ${message.content}`)
@@ -497,10 +507,21 @@ client.on('voiceStateUpdate', async (oldstate, newstate) => {
     if (oldstate.channelId === newstate.channelId) {
         return;
     }
+    let text = null
     if (oldstate.channelId === null && newstate.channelId !== null) {
         console.log("It's all connected!" + newstate.channel.members.size)
+        console.log(`connect username: ${newstate.member.displayName}`)
+        console.log(`connect userisbot: ${newstate.member.user.bot}`)
+        if ( !newstate.member.user.bot ) {
+            text = newstate.member.displayName + lang.USER_CONNECTED
+        }
     } else if (oldstate.channelId !== null && newstate.channelId === null) {
         console.log("It's all disconnected!")
+        console.log(`disconnect username: ${oldstate.member.displayName}`)
+        console.log(`disconnect userisbot: ${oldstate.member.user.bot}`)
+        if ( !oldstate.member.user.bot ) {
+            text = oldstate.member.displayName + lang.USER_DISCONNECTED
+        }
         const currentGuild = await client.guilds.cache.get(oldstate.guild.id)
         //console.log(currentGuild)
         if (oldstate.channel.members.size < 2 && currentGuild.members.me.voice.channel && oldstate.channelId === currentGuild.members.me.voice.channel.id) {
@@ -514,6 +535,13 @@ client.on('voiceStateUpdate', async (oldstate, newstate) => {
                 connection.destroy();
                 currenttextchannelid = null
             }
+        }
+    }
+    if ( text !== null ) {
+        const textch = client.channels.cache.get(currenttextchannelid)
+        if (textch) {
+            textch.send(text)
+            playOrQueue({ content: text, memberId: 0, guildId: 0 })
         }
     }
 });

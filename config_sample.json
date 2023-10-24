@@ -10,5 +10,6 @@
     "fastforwardspeed": 1.8,
     "owner_userid": "0",
     "language_file": "neutral.json",
-    "slashcommand_prefix": "ttsvox"
+    "slashcommand_prefix": "ttsvox",
+    "noread_prefix": ">"
 }
