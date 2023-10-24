@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.2.0 - 2023/10/25
+
+### Added
+- 読み上げ無視用のPrefixを設定できるようになりました
+- 入退室メッセージを追加しました
+- URL、スポイラーは置き換えられるようになりました
+- 設定保存時に何をしたかをよりわかりやすく表示するようにしました
+- 設定表示機能を追加しました
+- ボイスオーバーライド機能を追加しました ( [#2](https://github.com/castella-cake/Discord-TTSVOX/issues/2) )
+
+### Changed
+- ボイスオプションの変更と話者変更でスタイルを直接指定した場合ではEphemeral responseを使用しないようになりました
+
 ## 0.1.1 - 2023/10/23
 
 ### Changed

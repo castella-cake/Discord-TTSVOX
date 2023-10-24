@@ -1,6 +1,6 @@
 const { Client, GatewayIntentBits, Partials, ChannelType, ApplicationCommandOptionType, ActivityType, ActionRowBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, InteractionType, PermissionFlagsBits, PermissionsBitField } = require('discord.js');
 const { joinVoiceChannel, getVoiceConnection, createAudioPlayer, createAudioResource, AudioPlayerStatus } = require('@discordjs/voice');
-const { bot_token, voicevox_host, database_host, fastforwardqueue, fastforwardspeed, owner_userid, language_file, voicevox_preferhost } = require('./config.json');
+const { bot_token, voicevox_host, database_host, fastforwardqueue, fastforwardspeed, owner_userid, language_file, voicevox_preferhost, noread_prefix, initial_userdata } = require('./config.json');
 const lang = require('./langs/' + language_file);
 const { cmdArray } = require('./modules/cmdarray.js');
 const { synthesisRequest, IsActiveHost } = require('./modules/engineControl.js')
@@ -11,6 +11,8 @@ const { parse } = require('path');
 const packageInfo = require('./package.json');
 const userdata = new Keyv(database_host, { table: 'userobj' })
 const serverdata = new Keyv(database_host, { table: 'serverobj' })
+const url_regex = /https?:\/\/[-A-Z0-9+&@#/%=~_|$?!:,.]*[A-Z0-9+&@#/%=~_|$]/ig;
+const spoiler_regex = /\|\|(.*?)\|\|/ig;
 
 const client = new Client({ intents: [ GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates, GatewayIntentBits.GuildMessages, GatewayIntentBits.GuildMembers, GatewayIntentBits.MessageContent ], partials: [Partials.Channel] });
 
@@ -21,6 +23,7 @@ let isready = false
 let speakersdata = []
 const player = createAudioPlayer();
 let speakersnamearray = []
+let speakerIdInfoObj = {}
 let speakqueuearray = []
 let isBusy = false
 
@@ -58,6 +61,11 @@ client.once("ready", async () => {
                         response.text().then(data => {
                             speakersdata = JSON.parse(data)
                             speakersnamearray = speakersdata.map( elem => elem.name )
+                            speakersdata.map( elem => {
+                                elem.styles.map( selem => {
+                                    speakerIdInfoObj[selem.id] = { styleName: selem.name, speakerName: elem.name, speakerUUID: elem.speaker_uuid }
+                                } )
+                            } )
                             // isreadyを立ててコマンドの受付を開始する
                             client.user.setPresence({
                                 activities: [{ name: lang.READY, type: ActivityType.Playing }],
@@ -107,7 +115,7 @@ client.on("interactionCreate", async (interaction) => {
                     setUserData(memberId, moddedUserData)
                     await interaction.update({
                         content: lang.SAVE_SUCCESS,
-                        ephemeral: true,
+                        ephemeral: false,
                         components: []
                     });
                 })
@@ -197,8 +205,8 @@ client.on("interactionCreate", async (interaction) => {
                             moddedUserData.speakerId = styleobj.id
                             setUserData(memberId, moddedUserData)
                             await interaction.reply({
-                                content: lang.SAVE_SUCCESS,
-                                ephemeral: true
+                                content: lang.SAVE_SUCCESS + "話者を **" + interaction.options.getString("speakername") + " " + interaction.options.getString("speakerstyle") + "** " + lang.CHANGED,
+                                ephemeral: false
                             });
                         })
                     } else {
@@ -214,7 +222,7 @@ client.on("interactionCreate", async (interaction) => {
                     const styleselectarray = []
                     Promise.all(speakerobj.styles.map(elem => {
                         styleselectarray.push(new StringSelectMenuOptionBuilder()
-                            .setLabel(elem.name)
+                            .setLabel(`${interaction.options.getString("speakername")} ${elem.name}`)
                             .setValue(`${elem.id}`)
                         )
                     })).then(async () => {
@@ -231,18 +239,65 @@ client.on("interactionCreate", async (interaction) => {
                         })
                     }) 
                 }
-
             } else {
                 await interaction.reply({
                     content: `${lang.SPEAKER_NOT_FOUND}${speakersnamearray.join(',')}`,
                     ephemeral: true
                 });
             }
-        } else if (interaction.options.getSubcommand() === 'credit') {
-            await interaction.reply({
-                content: `TTSVOX v${packageInfo.version}\nリポジトリ: <${packageInfo.homepage}>\n\nVOICEVOX: ${speakersnamearray.join(',')}`,
-                ephemeral: true
-            });
+        } else if (interaction.options.getSubcommand() === 'voiceprefixassign') {
+            // 話者がそもそも存在しない場合は突っぱねる
+            if (speakersnamearray.includes(interaction.options.getString("speakername"))) {
+                // その話者を取得したspeakersから検索
+                const speakerobj = speakersdata.find(elem => elem.name === interaction.options.getString("speakername"))
+                // 検索結果からスタイルを検索
+                const styleobj = speakerobj.styles.find(elem => elem.name === interaction.options.getString("speakerstyle"))
+                // 検索結果があるならそのまま使用して、ないなら突っぱねる
+                if ( styleobj ) {
+                    const memberId = interaction.member.id
+                    getUserData(memberId).then(async data => {
+                        let moddedUserData = JSON.parse(JSON.stringify(data))
+                        // あるならそれを使い、ないなら空のObj
+                        const vorObj = moddedUserData.vorSettings ?? {}
+                        vorObj[interaction.options.getString("assignprefix")] = styleobj.id
+                        moddedUserData.vorSettings = vorObj
+                        setUserData(memberId, moddedUserData)
+                        await interaction.reply({
+                            content: lang.SAVE_SUCCESS + "プレフィックス `" + interaction.options.getString("assignprefix") + "` に 話者 **" + interaction.options.getString("speakername") + " " + interaction.options.getString("speakerstyle") + "** " + lang.ASSIGNED,
+                            ephemeral: false
+                        });
+                    })
+                } else {
+                    const stylelist = speakerobj.styles.map(elem => { return elem.name })
+                    await interaction.reply({
+                        content: `${lang.STYLE_NOT_FOUND}${stylelist.join(", ")}`,
+                        ephemeral: true
+                    });
+                }
+            } else {
+                await interaction.reply({
+                    content: `${lang.SPEAKER_NOT_FOUND}${speakersnamearray.join(',')}`,
+                    ephemeral: true
+                });
+            }
+        } else if (interaction.options.getSubcommand() === 'voiceprefixremove') {
+            const memberId = interaction.member.id
+            getUserData(memberId).then(async data => {
+                let text = lang.PREFIX_NOT_FOUND
+                let moddedUserData = JSON.parse(JSON.stringify(data))
+                // あるならそれを使い、ないなら空のObj
+                const vorObj = moddedUserData.vorSettings ?? {}
+                if ( Object.keys(vorObj).includes(interaction.options.getString("removeprefix")) ) {
+                    delete vorObj[interaction.options.getString("removeprefix")]
+                    moddedUserData.vorSettings = vorObj
+                    setUserData(memberId, moddedUserData)
+                    text = lang.SAVE_SUCCESS + "プレフィックス `" + interaction.options.getString("removeprefix") + "` への割り当て" + lang.DELETED
+                }
+                await interaction.reply({
+                    content: text,
+                    ephemeral: true
+                });
+            })
         } else if (interaction.options.getSubcommand() === 'chgvoiceoption') {
             const memberId = interaction.member.id
             if (interaction.options.getString("voiceoption") === "speedScale" && ( interaction.options.getNumber("optionvalue") > 2.0 || interaction.options.getNumber("optionvalue") < 0.5 )) {
@@ -264,14 +319,23 @@ client.on("interactionCreate", async (interaction) => {
                 });
                 return;
             }
+            let typeText = "不明なオプション"
+            if ( interaction.options.getString("voiceoption") === "speedScale" ) {
+                typeText = "話速"
+            } else if ( interaction.options.getString("voiceoption") === "pitchScale" ) {
+                typeText = "ピッチ"
+            } else if ( interaction.options.getString("voiceoption") === "intonationScale" ) {
+                typeText = "抑揚"
+            }
+
             getDataBase("user", memberId).then(async data => {
                 let moddedUserData = JSON.parse(JSON.stringify(data))
                 moddedUserData[interaction.options.getString("voiceoption")] = interaction.options.getNumber("optionvalue")
                 setUserData(memberId, moddedUserData)
                 console.log(`User data modified: ${memberId}`)
                 await interaction.reply({
-                    content: lang.SAVE_SUCCESS,
-                    ephemeral: true
+                    content: lang.SAVE_SUCCESS + "**" + typeText + "** を **" + interaction.options.getNumber("optionvalue") + "** " + lang.CHANGED,
+                    ephemeral: false
                 });
             })
         // TODO: この辺はfunctionにまとめて、できる限り複製されたコードをなくす
@@ -286,7 +350,7 @@ client.on("interactionCreate", async (interaction) => {
                     setServerData(guildId, moddedGuildData)
                     console.log(`Server data modified: ${guildId}`)
                     await interaction.reply({
-                        content: lang.SAVE_SUCCESS_SERVER,
+                        content: lang.SAVE_SUCCESS_SERVER + "`" + interaction.options.getString("dictreplacefrom") + "` を `" + interaction.options.getString("dictreplaceto") + "` へ置き換えるよう" + lang.CONFIGURED,
                         ephemeral: false
                     });
                 })
@@ -300,7 +364,7 @@ client.on("interactionCreate", async (interaction) => {
                     setUserData(memberId, moddedUserData)
                     console.log(`User data modified: ${memberId}`)
                     await interaction.reply({
-                        content: lang.SAVE_SUCCESS,
+                        content: lang.SAVE_SUCCESS + "`" + interaction.options.getString("dictreplacefrom") + "` を `" + interaction.options.getString("dictreplaceto") + "` へ置き換えるよう" + lang.CONFIGURED,
                         ephemeral: true
                     });
                 })
@@ -411,6 +475,35 @@ client.on("interactionCreate", async (interaction) => {
                 });
             }
 
+        } else if (interaction.options.getSubcommand() === 'credit') {
+            await interaction.reply({
+                content: `TTSVOX v${packageInfo.version}\nリポジトリ: <${packageInfo.homepage}>\n\nVOICEVOX: ${speakersnamearray.join(',')}`,
+                ephemeral: true
+            });
+        } else if (interaction.options.getSubcommand() === 'showmysettings') {
+            const memberId = interaction.member.id
+            const data = await getDataBase("user", memberId)
+            const ephemeral = interaction.options.getBoolean("ephemeral") ?? true
+
+            const speakerId = data.speakerId ?? initial_userdata.speakerId
+            const speedScale = data.speedScale ?? initial_userdata.speedScale
+            const pitchScale = data.pitchScale ?? initial_userdata.pitchScale
+            const intonationScale = data.intonationScale ?? initial_userdata.intonationScale
+            const vorSettings = data.vorSettings ?? {}
+
+            let vorSettingsText = "ボイスオーバーライド: 割り当てなし"
+            if ( Object.keys(vorSettings).length > 0 ) { 
+                vorSettingsText = "ボイスオーバーライド(" + Object.keys(vorSettings).length + "個の割り当て): \n```\n" + Object.keys(vorSettings).slice(0,10).map(elem => elem + " => " + speakerIdInfoObj[vorSettings[elem]].speakerName + " " + speakerIdInfoObj[vorSettings[elem]].styleName).join("\n") + "\n```(最初の10個を表示)"
+            }
+
+            const text = "**" + interaction.member.displayName + " さんの設定**\n" + 
+            "使用中の話者: " + speakerIdInfoObj[speakerId].speakerName + " " + speakerIdInfoObj[speakerId].styleName + "\n" + 
+            "話速: " + speedScale  + " / ピッチ: " + pitchScale + " / 抑揚: " + intonationScale + "\n\n" + 
+            vorSettingsText;
+            await interaction.reply({
+                content: text,
+                ephemeral: ephemeral
+            });
         } else {
             await interaction.reply('Invalid Command.....');
         }
@@ -431,7 +524,10 @@ function playMessage(obj) {
         const intonation = userdata.intonationScale ?? 1.0
         const dict = userdata.dict ?? []
         const serverdict = serverdata.dict ?? []
+        const vorSettings = userdata.vorSettings ?? {}
+        const vorPrefixArray = Object.keys(vorSettings)
         let speakerId = userdata.speakerId ?? 0
+
         // ボイスオーバーライド
         /*if (obj.content.startsWith("vor?=")) {
             if (obj.content.indexOf("\n") !== -1) {
@@ -447,7 +543,13 @@ function playMessage(obj) {
         
         let content = obj.content.toLowerCase()
         console.log(`Message in channel!: ${obj.content} ${userdata.speakerId} ${speed} ${pitch} ${intonation}`)
-        Promise.all([ dict.map(async elem => { content = content.replaceAll(elem.from.toLowerCase(), elem.to)}), serverdict.map(async elem => { content = content.replaceAll(elem.from.toLowerCase(), elem.to)}) ]).then(async () => {
+        Promise.all([ 
+            // vorのPrefixの配列でmapして、それで始まるなら話者をそのIDに、またcontentの先頭にあるPrefixも取っ払う
+            vorPrefixArray.map(elem => { if ( content.startsWith(elem.toLowerCase()) ) { speakerId = vorSettings[elem]; content = content.replace(elem, ""); } }), 
+            // dict用
+            dict.map(async elem => { content = content.replaceAll(elem.from.toLowerCase(), elem.to)}), 
+            serverdict.map(async elem => { content = content.replaceAll(elem.from.toLowerCase(), elem.to)}) 
+        ]).then(async () => {
             let currentHost = voicevox_host
             IsActiveHost(voicevox_preferhost).then(async (result) => {
                 if ( result === true ) {
@@ -477,17 +579,25 @@ function playMessage(obj) {
     })
 }
 
+function playOrQueue(obj) {
+    if ( player.state.status === AudioPlayerStatus.Idle && isBusy !== true ) {
+        playMessage(obj)
+    } else {
+        speakqueuearray.push(obj)
+        console.log("読み上げ中のメッセージがあったため、キューに移動しました")
+    }
+}
+
 client.on('messageCreate', message => {
     if (message.author.bot) {
         return;
     }
-    if (message.channel.id === currenttextchannelid) {
-        if ( player.state.status === AudioPlayerStatus.Idle && isBusy !== true ) {
-            playMessage({ content: message.content, memberId: message.member.id, guildId: message.guild.id })
-        } else {
-            speakqueuearray.push({ content: message.content, memberId: message.member.id, guildId: message.guild.id  })
-            console.log("読み上げ中のメッセージがあったため、キューに移動しました")
+    if ( message.channel.id === currenttextchannelid && !message.content.startsWith(noread_prefix) ) {
+        let text = message.content.replace(url_regex, "").replace(spoiler_regex, lang.SPOILER_REPLACE)
+        if ( url_regex.test(message.content) ) {
+            text = text + lang.URL_INCLUDED
         }
+        playOrQueue({ content: text, memberId: message.member.id, guildId: message.guild.id })
     }
 
     //console.log(`Message coming: ${message.content}`)
@@ -497,10 +607,21 @@ client.on('voiceStateUpdate', async (oldstate, newstate) => {
     if (oldstate.channelId === newstate.channelId) {
         return;
     }
+    let text = null
     if (oldstate.channelId === null && newstate.channelId !== null) {
         console.log("It's all connected!" + newstate.channel.members.size)
+        console.log(`connect username: ${newstate.member.displayName}`)
+        console.log(`connect userisbot: ${newstate.member.user.bot}`)
+        if ( !newstate.member.user.bot ) {
+            text = newstate.member.displayName + lang.USER_CONNECTED
+        }
     } else if (oldstate.channelId !== null && newstate.channelId === null) {
         console.log("It's all disconnected!")
+        console.log(`disconnect username: ${oldstate.member.displayName}`)
+        console.log(`disconnect userisbot: ${oldstate.member.user.bot}`)
+        if ( !oldstate.member.user.bot ) {
+            text = oldstate.member.displayName + lang.USER_DISCONNECTED
+        }
         const currentGuild = await client.guilds.cache.get(oldstate.guild.id)
         //console.log(currentGuild)
         if (oldstate.channel.members.size < 2 && currentGuild.members.me.voice.channel && oldstate.channelId === currentGuild.members.me.voice.channel.id) {
@@ -514,6 +635,13 @@ client.on('voiceStateUpdate', async (oldstate, newstate) => {
                 connection.destroy();
                 currenttextchannelid = null
             }
+        }
+    }
+    if ( text !== null ) {
+        const textch = client.channels.cache.get(currenttextchannelid)
+        if (textch) {
+            textch.send(text)
+            playOrQueue({ content: text, memberId: 0, guildId: 0 })
         }
     }
 });

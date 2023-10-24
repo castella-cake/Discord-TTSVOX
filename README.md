@@ -15,6 +15,7 @@ TTSVOXは、Node.jsとDiscord.jsを用いて開発されたDiscord用のVOICEVOX
 - [x] サーバー毎簡易辞書機能
 - [x] 読み上げキューが多い場合に速読する
 - [x] 優先ホスト機能
+- [x] ボイスオーバーライド
 
 # Quick start
 このリポジトリにVOICEVOXエンジンは含まれていません。各自でダウンロードする必要があります。   
@@ -41,6 +42,8 @@ npm run start
     - `speedScale`: 話速
     - `pitchScale`: 音高
     - `intonationScale`: 抑揚
+    - `vorSettings`: ボイスオーバーライドの設定    
+    プレフィックスをキーに、使用する話者を値にします
 - `initial_serverdata`: サーバーデータがない場合に使用する初期サーバーデータ
     - `serverDict`: サーバー辞書の配列。オブジェクトを入れます
         - `from`: 置き換え元文字列
@@ -58,3 +61,7 @@ npm run start
 - `fastforwardqueue`: キューされたメッセージが設定された値以上の場合に速読を有効化します。0で無効化
 - `fastforwardspeed`: 速読が有効化された場合の話速
 - `owner_userid`: BotのオーナーのユーザーID
+- `language_file`: 使用する言語ファイル    
+`langs/<指定した名前>.json` で読み込まれます
+- `slashcommand_prefix`: スラッシュコマンドの先頭の名前
+- `noread_prefix`: 読み上げを無視するPrefix

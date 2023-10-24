@@ -24,7 +24,7 @@ const cmdArray = [
             {
                 type: ApplicationCommandOptionType.Subcommand,
                 name: `chgvoice`,
-                description: "話者を変更します。スタイルを入力せずに実行すると、スタイルの選択パネルが表示されます。設定はあなた以外には見えません。",
+                description: "話者を変更します。スタイルを入力せずに実行すると、スタイルの選択パネルが表示されます。",
                 options: [{
                     type: ApplicationCommandOptionType.String,
                     name: "speakername",
@@ -61,6 +61,40 @@ const cmdArray = [
                         required: true
                     }
                 ],
+            },
+            {
+                type: ApplicationCommandOptionType.Subcommand,
+                name: `voiceprefixassign`,
+                description: "特定のPrefixにボイスを割り当てます。",
+                options: [{
+                    type: ApplicationCommandOptionType.String,
+                    name: "assignprefix",
+                    description: "割り当てるプレフィックスを入力",
+                    required: true
+                },
+                {
+                    type: ApplicationCommandOptionType.String,
+                    name: "speakername",
+                    description: "話者名を入力",
+                    required: true
+                },
+                {
+                    type: ApplicationCommandOptionType.String,
+                    name: "speakerstyle",
+                    description: "スタイルを入力(オプション)",
+                    required: true
+                }],
+            },
+            {
+                type: ApplicationCommandOptionType.Subcommand,
+                name: `voiceprefixremove`,
+                description: "指定した接頭辞からボイスの割り当てを削除します。",
+                options: [{
+                    type: ApplicationCommandOptionType.String,
+                    name: "removeprefix",
+                    description: "割り当てを解除するプレフィックスを入力",
+                    required: true
+                }],
             },
             {
                 type: ApplicationCommandOptionType.Subcommand,
@@ -136,6 +170,17 @@ const cmdArray = [
                         required: false
                     }
                 ],
+            },
+            {
+                type: ApplicationCommandOptionType.Subcommand,
+                name: `showmysettings`,
+                description: "現在のボイス設定,ボイスパラメータ,ボイスオーバーライド設定を表示します。辞書はshowdictから確認できます。",
+                options: [{
+                    type: ApplicationCommandOptionType.Boolean,
+                    name: "ephemeral",
+                    description: "自分にのみ表示するかどうか(何も指定しない場合は「True」)",
+                    required: false
+                }],
             },
             {
                 type: ApplicationCommandOptionType.Subcommand,

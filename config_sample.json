@@ -1,6 +1,6 @@
 {
     "bot_token": "TOKEN HERE",
-    "initial_userdata": { "speakerId": 3, "dict": [], "speedScale": 1.0, "pitchScale": 0.0, "intonationScale": 1.0 },
+    "initial_userdata": { "speakerId": 3, "dict": [], "speedScale": 1.0, "pitchScale": 0.0, "intonationScale": 1.0, "vorSettings": {} },
     "initial_serverdata": { "dict": [] },
     "voicevox_host": "127.0.0.1:50021",
     "voicevox_preferhost": "",
@@ -10,5 +10,6 @@
     "fastforwardspeed": 1.8,
     "owner_userid": "0",
     "language_file": "neutral.json",
-    "slashcommand_prefix": "ttsvox"
+    "slashcommand_prefix": "ttsvox",
+    "noread_prefix": ">"
 }
