@@ -109,7 +109,7 @@ client.on("interactionCreate", async (interaction) => {
                     setUserData(memberId, moddedUserData)
                     await interaction.update({
                         content: lang.SAVE_SUCCESS,
-                        ephemeral: true,
+                        ephemeral: false,
                         components: []
                     });
                 })
@@ -199,8 +199,8 @@ client.on("interactionCreate", async (interaction) => {
                             moddedUserData.speakerId = styleobj.id
                             setUserData(memberId, moddedUserData)
                             await interaction.reply({
-                                content: lang.SAVE_SUCCESS,
-                                ephemeral: true
+                                content: lang.SAVE_SUCCESS + "話者を **" + interaction.options.getString("speakername") + " " + interaction.options.getString("speakerstyle") + "** " + lang.CHANGED,
+                                ephemeral: false
                             });
                         })
                     } else {
@@ -216,7 +216,7 @@ client.on("interactionCreate", async (interaction) => {
                     const styleselectarray = []
                     Promise.all(speakerobj.styles.map(elem => {
                         styleselectarray.push(new StringSelectMenuOptionBuilder()
-                            .setLabel(elem.name)
+                            .setLabel(`${interaction.options.getString("speakername")} ${elem.name}`)
                             .setValue(`${elem.id}`)
                         )
                     })).then(async () => {
@@ -266,14 +266,23 @@ client.on("interactionCreate", async (interaction) => {
                 });
                 return;
             }
+            let typeText = "不明なオプション"
+            if ( interaction.options.getString("voiceoption") === "speedScale" ) {
+                typeText = "話速"
+            } else if ( interaction.options.getString("voiceoption") === "pitchScale" ) {
+                typeText = "ピッチ"
+            } else if ( interaction.options.getString("voiceoption") === "intonationScale" ) {
+                typeText = "抑揚"
+            }
+
             getDataBase("user", memberId).then(async data => {
                 let moddedUserData = JSON.parse(JSON.stringify(data))
                 moddedUserData[interaction.options.getString("voiceoption")] = interaction.options.getNumber("optionvalue")
                 setUserData(memberId, moddedUserData)
                 console.log(`User data modified: ${memberId}`)
                 await interaction.reply({
-                    content: lang.SAVE_SUCCESS,
-                    ephemeral: true
+                    content: lang.SAVE_SUCCESS + "**" + typeText + "** を **" + interaction.options.getNumber("optionvalue") + "** " + lang.CHANGED,
+                    ephemeral: false
                 });
             })
         // TODO: この辺はfunctionにまとめて、できる限り複製されたコードをなくす

@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 入退室メッセージを追加しました
 - URL、スポイラーは置き換えられるようになりました
 
+### Changed
+- ボイスオプションの変更と話者変更でスタイルを直接指定した場合ではEphemeral responseを使用しないようになりました
+
 ## 0.1.0 - 2023/10/19
 
 ### Added
