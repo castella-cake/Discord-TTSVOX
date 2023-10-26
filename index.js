@@ -509,7 +509,7 @@ client.on("interactionCreate", async (interaction) => {
         }
     } catch (err) {
         console.log(err)
-        interaction.channel.send(lang.UNEXCEPTED_ERROR)
+        interaction.channel.send(lang.UNEXPECTED_ERROR)
     }
 });
 

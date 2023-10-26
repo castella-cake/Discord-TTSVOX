@@ -23,7 +23,7 @@
     "SAVE_SUCCESS_SERVER": "サーバーに変更を保存しました。",
     "NO_DICT": "辞書の登録が一つもありません。",
     "DICT_OUTPUT_TO_FILE": "辞書の内容をテキストファイルに出力しました。",
-    "UNEXCEPTED_ERROR": "エラー！問題が発生しました。",
+    "UNEXPECTED_ERROR": "エラー！問題が発生しました。",
     "AUTO_DISCONNECT_NOLISTENER": "誰もいなくなったため、退出しました",
     "ERROR": "ありえないエラーです",
     "URL_INCLUDED": " URLが添付されました",
