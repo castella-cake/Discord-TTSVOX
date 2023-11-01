@@ -13,6 +13,7 @@ const userdata = new Keyv(database_host, { table: 'userobj' })
 const serverdata = new Keyv(database_host, { table: 'serverobj' })
 const url_regex = /https?:\/\/[-A-Z0-9+&@#/%=~_|$?!:,.]*[A-Z0-9+&@#/%=~_|$]/ig;
 const spoiler_regex = /\|\|(.*?)\|\|/ig;
+const emoji_regex = /<:(.*?):(\d+)>/g;
 
 const client = new Client({ intents: [ GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates, GatewayIntentBits.GuildMessages, GatewayIntentBits.GuildMembers, GatewayIntentBits.MessageContent ], partials: [Partials.Channel] });
 
@@ -550,7 +551,15 @@ function playMessage(obj) {
                     currentHost = voicevox_preferhost
                     console.log("優先ホストが使用されます")
                 }
-                const audioqueryresponse = await fetch(`http://${currentHost}/audio_query?text=${encodeURIComponent(content)}&speaker=${encodeURIComponent(speakerId)}`, {
+
+                let speakText = content.replace(url_regex, "").replace(spoiler_regex, lang.SPOILER_REPLACE)
+                if ( url_regex.test(content) ) {
+                    speakText = speakText + lang.URL_INCLUDED
+                }
+                speakText = speakText.replace(emoji_regex, (match, shortCode, emojiId) => {
+                    return shortCode
+                })
+                const audioqueryresponse = await fetch(`http://${currentHost}/audio_query?text=${encodeURIComponent(speakText)}&speaker=${encodeURIComponent(speakerId)}`, {
                     method: "POST"
                 }).catch((err) => {
                     console.log(err)
@@ -587,10 +596,7 @@ client.on('messageCreate', message => {
         return;
     }
     if ( message.channel.id === currenttextchannelid && !message.content.startsWith(noread_prefix) ) {
-        let text = message.content.replace(url_regex, "").replace(spoiler_regex, lang.SPOILER_REPLACE)
-        if ( url_regex.test(message.content) ) {
-            text = text + lang.URL_INCLUDED
-        }
+        let text = message.content
         playOrQueue({ content: text, memberId: message.member.id, guildId: message.guild.id })
     }
 
