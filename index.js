@@ -4,7 +4,7 @@ const { bot_token, voicevox_host, database_host, fastforwardqueue, fastforwardsp
 const lang = require('./langs/' + language_file);
 const { cmdArray } = require('./modules/cmdarray.js');
 const { synthesisRequest, IsActiveHost } = require('./modules/engineControl.js')
-const { getUserData, setUserData, getServerData, setServerData, getDataBase } = require('./modules/dbcontrol.js')
+const { getUserData, setUserData, getServerData, setServerData, getDataBase, setDataBase } = require('./modules/dbcontrol.js')
 const fs = require("fs");
 const Keyv = require('keyv');
 const { parse } = require('path');
@@ -340,35 +340,29 @@ client.on("interactionCreate", async (interaction) => {
             })
         // TODO: この辺はfunctionにまとめて、できる限り複製されたコードをなくす
         } else if (interaction.options.getSubcommand() === 'dictadd') {
-            if (interaction.options.getString("controldict") == "server" ) {
-                // このインタラクションをしたギルドIDを取得
-                const guildId = interaction.guild.id
-                // ユーザーデータのテーブルからギルドID名の行を取得
-                getServerData(guildId).then(async data => {
-                    let moddedGuildData = JSON.parse(JSON.stringify(data))
-                    moddedGuildData.dict.push({ from: interaction.options.getString("dictreplacefrom"), to: interaction.options.getString("dictreplaceto") })
-                    setServerData(guildId, moddedGuildData)
-                    console.log(`Server data modified: ${guildId}`)
+            // このインタラクションをしたIDを取得
+            const interactionId = { server: ( interaction.guild.id ?? 0 ), personal: ( interaction.member.id ?? 0 ) }
+            const interactionString = { server: lang.SAVE_SUCCESS_SERVER, personal: lang.SAVE_SUCCESS }
+            const controlType = interaction.options.getString("controldict")
+            // ユーザーデータのテーブルからメンバーID名の行を取得
+            getDataBase(controlType, interactionId[controlType]).then(async data => {
+                let moddedData = JSON.parse(JSON.stringify(data))
+                // 変換元が一致するものが一つもないなら
+                if ( moddedData.dict.filter(elem => elem.from.toLowerCase() === interaction.options.getString("dictreplacefrom").toLowerCase() ).length === 0) {
+                    // Pushする
+                    moddedData.dict.push({ from: interaction.options.getString("dictreplacefrom"), to: interaction.options.getString("dictreplaceto") })
+                    setDataBase(interaction.options.getString("controldict"), interactionId[controlType], moddedData)
                     await interaction.reply({
-                        content: lang.SAVE_SUCCESS_SERVER + "`" + interaction.options.getString("dictreplacefrom") + "` を `" + interaction.options.getString("dictreplaceto") + "` へ置き換えるよう" + lang.CONFIGURED,
-                        ephemeral: false
+                        content: interactionString[controlType] + "`" + interaction.options.getString("dictreplacefrom") + "` を `" + interaction.options.getString("dictreplaceto") + "` へ置き換えるよう" + lang.CONFIGURED,
+                        ephemeral: (controlType === "personal")
                     });
-                })
-            } else {
-                // このインタラクションをしたメンバーIDを取得
-                const memberId = interaction.member.id
-                // ユーザーデータのテーブルからメンバーID名の行を取得
-                getUserData(memberId).then(async data => {
-                    let moddedUserData = JSON.parse(JSON.stringify(data))
-                    moddedUserData.dict.push({ from: interaction.options.getString("dictreplacefrom"), to: interaction.options.getString("dictreplaceto") })
-                    setUserData(memberId, moddedUserData)
-                    console.log(`User data modified: ${memberId}`)
+                } else {
                     await interaction.reply({
-                        content: lang.SAVE_SUCCESS + "`" + interaction.options.getString("dictreplacefrom") + "` を `" + interaction.options.getString("dictreplaceto") + "` へ置き換えるよう" + lang.CONFIGURED,
+                        content: lang.CHANGE_FAILED + "`" + interaction.options.getString("dictreplacefrom") + "`" + lang.ALREADY_EXIST,
                         ephemeral: true
                     });
-                })
-            }
+                }
+            })
         } else if (interaction.options.getSubcommand() === 'dictremove') {
             if (interaction.options.getString("controldict") == "server" ) {
                 // このインタラクションをしたギルドIDを取得
