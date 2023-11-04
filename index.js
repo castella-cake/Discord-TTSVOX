@@ -595,7 +595,7 @@ client.on('messageCreate', message => {
     if (message.author.bot) {
         return;
     }
-    if ( message.channel.id === currenttextchannelid && !message.content.startsWith(noread_prefix) ) {
+    if ( message.channel.id === currenttextchannelid && !message.content.startsWith(noread_prefix) && message.content ) {
         let text = message.content
         playOrQueue({ content: text, memberId: message.member.id, guildId: message.guild.id })
     }
