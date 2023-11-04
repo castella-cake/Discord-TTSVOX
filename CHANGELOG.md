@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.2.1 - 2023/11/04
+
+### Changed
+- 辞書の登録時に変換元が既に存在する場合、登録しないようになりました
+- URLとネタバレの置き換え文章は、辞書置き換えの対象外になりました
+
+### Fixed
+- カスタム絵文字の読み上げにIDが入る問題を修正しました
+- テキストが空かどうかのチェックを行うようにしました
+
 ## 0.2.0 - 2023/10/25
 
 ### Added
