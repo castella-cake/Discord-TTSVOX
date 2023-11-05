@@ -1,6 +1,6 @@
 {
   "name": "discord-ttsvox",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Discord VOICEVOX TTSBot",
   "main": "index.js",
   "scripts": {

@@ -5,6 +5,7 @@ const lang = require('./langs/' + language_file);
 const { cmdArray } = require('./modules/cmdarray.js');
 const { synthesisRequest, IsActiveHost } = require('./modules/engineControl.js')
 const { getUserData, setUserData, getServerData, setServerData, getDataBase, setDataBase } = require('./modules/dbcontrol.js')
+const { addToDict, removeFromDict } = require('./modules/dictcontrol.js')
 const fs = require("fs");
 const Keyv = require('keyv');
 const { parse } = require('path');
@@ -147,6 +148,10 @@ client.on("interactionCreate", async (interaction) => {
                 // どこにも参加していないなら現在のチャンネルIDを記録して接続し、プレイヤーをサブスクライブ
                 console.log(interaction.channel)
                 currenttextchannelid = interaction.channel.id
+                client.user.setPresence({
+                    activities: [{ name: memberVC.name, type: ActivityType.Watching }],
+                    status: 'online',
+                });
                 const connection = joinVoiceChannel({
                     guildId: guild.id,
                     channelId: memberVC.id,
@@ -182,6 +187,10 @@ client.on("interactionCreate", async (interaction) => {
                     currenttextchannelid = null
                     connection.destroy();
                     message = lang.VC_DISCONNECTED;
+                    client.user.setPresence({
+                        activities: [{ name: lang.READY, type: ActivityType.Playing }],
+                        status: 'online',
+                    });
                 }
             }
             //console.log(message)
@@ -343,80 +352,19 @@ client.on("interactionCreate", async (interaction) => {
         } else if (interaction.options.getSubcommand() === 'dictadd') {
             // このインタラクションをしたIDを取得
             const interactionId = { server: ( interaction.guild.id ?? 0 ), personal: ( interaction.member.id ?? 0 ) }
-            const interactionString = { server: lang.SAVE_SUCCESS_SERVER, personal: lang.SAVE_SUCCESS }
             const controlType = interaction.options.getString("controldict")
-            // ユーザーデータのテーブルからメンバーID名の行を取得
-            getDataBase(controlType, interactionId[controlType]).then(async data => {
-                let moddedData = JSON.parse(JSON.stringify(data))
-                // 変換元が一致するものが一つもないなら
-                if ( moddedData.dict.filter(elem => elem.from.toLowerCase() === interaction.options.getString("dictreplacefrom").toLowerCase() ).length === 0) {
-                    // Pushする
-                    moddedData.dict.push({ from: interaction.options.getString("dictreplacefrom"), to: interaction.options.getString("dictreplaceto") })
-                    setDataBase(interaction.options.getString("controldict"), interactionId[controlType], moddedData)
-                    await interaction.reply({
-                        content: interactionString[controlType] + "`" + interaction.options.getString("dictreplacefrom") + "` を `" + interaction.options.getString("dictreplaceto") + "` へ置き換えるよう" + lang.CONFIGURED,
-                        ephemeral: (controlType === "personal")
-                    });
-                } else {
-                    await interaction.reply({
-                        content: lang.CHANGE_FAILED + "`" + interaction.options.getString("dictreplacefrom") + "`" + lang.ALREADY_EXIST,
-                        ephemeral: true
-                    });
-                }
+            const controlId = interactionId[controlType]
+            addToDict(controlType, controlId, interaction.options.getString("dictreplacefrom"), interaction.options.getString("dictreplaceto")).then(async result => {
+                await interaction.reply(result);
             })
         } else if (interaction.options.getSubcommand() === 'dictremove') {
-            if (interaction.options.getString("controldict") == "server" ) {
-                // このインタラクションをしたギルドIDを取得
-                const guildId = interaction.guild.id
-                // ユーザーデータのテーブルからギルドID名の行を取得
-                getServerData(guildId).then(async data => {
-                    let moddedGuildData = JSON.parse(JSON.stringify(data))
-                    // 「お前消す」なワードのobjを探す
-                    const dictObj = moddedGuildData.dict.find(elem => elem.from === interaction.options.getString("deleteword"))
-                    //console.log(dictObj)
-                    if ( dictObj != undefined ) {
-                        // さっき探したやつでfilter
-                        moddedGuildData.dict = moddedGuildData.dict.filter(elem => elem !== dictObj)
-                        setServerData(guildId, moddedGuildData)
-                        console.log(`Server data modified: ${guildId}`)
-                        await interaction.reply({
-                            content: lang.SAVE_SUCCESS_SERVER,
-                            ephemeral: false
-                        });
-                    } else {
-                        await interaction.reply({
-                            content: lang.WORD_NOT_FOUND,
-                            ephemeral: true
-                        });
-                    }
-                })
-            } else {
-                // このインタラクションをしたメンバーIDを取得
-                const memberId = interaction.member.id
-                // ユーザーデータのテーブルからメンバーID名の行を取得
-                getUserData(memberId).then(async data => {
-                    // 値渡し
-                    let moddedUserData = JSON.parse(JSON.stringify(data))
-                    // 「お前消す」なワードのobjを探す
-                    const dictobj = moddedUserData.dict.find(elem => elem.from === interaction.options.getString("deleteword"))
-                    //console.log(dictobj)
-                    if ( dictobj != undefined ) {
-                        // さっき探したやつでfilter
-                        moddedUserData.dict = moddedUserData.dict.filter(elem => elem !== dictobj)
-                        setUserData(memberId, moddedUserData)
-                        console.log(`User data modified: ${memberId}`)
-                        await interaction.reply({
-                            content: lang.SAVE_SUCCESS,
-                            ephemeral: true
-                        });
-                    } else {
-                        await interaction.reply({
-                            content: lang.WORD_NOT_FOUND,
-                            ephemeral: true
-                        });
-                    }
-                })
-            }
+            // このインタラクションをしたIDを取得
+            const interactionId = { server: ( interaction.guild.id ?? 0 ), personal: ( interaction.member.id ?? 0 ) }
+            const controlType = interaction.options.getString("controldict")
+            const controlId = interactionId[controlType]
+            removeFromDict(controlType, controlId, interaction.options.getString("deleteword")).then(async result => {
+                await interaction.reply(result);
+            })
         } else if (interaction.options.getSubcommand() === 'dictshow') {
             let listTextArray = []
             let ephemeralStat = interaction.options.getBoolean("ephemeral") ?? true
@@ -469,7 +417,11 @@ client.on("interactionCreate", async (interaction) => {
                     ephemeral: false
                 });
             }
-
+        } else if (interaction.options.getSubcommand() === 'showspeakers') {
+            await interaction.reply({
+                content: `TTSVOX v${packageInfo.version}\nリポジトリ: <${packageInfo.homepage}>\n\nVOICEVOX: ${speakersnamearray.join(',')}`,
+                ephemeral: true
+            });
         } else if (interaction.options.getSubcommand() === 'credit') {
             await interaction.reply({
                 content: `TTSVOX v${packageInfo.version}\nリポジトリ: <${packageInfo.homepage}>\n\nVOICEVOX: ${speakersnamearray.join(',')}`,
@@ -612,17 +564,18 @@ client.on('voiceStateUpdate', async (oldstate, newstate) => {
         console.log("It's all connected!" + newstate.channel.members.size)
         console.log(`connect username: ${newstate.member.displayName}`)
         console.log(`connect userisbot: ${newstate.member.user.bot}`)
-        if ( !newstate.member.user.bot && newstate.channelId === currentGuild.members.me.voice.channel.id  ) {
+        const currentGuild = await client.guilds.cache.get(newstate.guild.id)
+        if ( !newstate.member.user.bot && currentGuild.members.me.voice.channel && newstate.channelId === currentGuild.members.me.voice.channel.id  ) {
             text = newstate.member.displayName + lang.USER_CONNECTED
         }
     } else if (oldstate.channelId !== null && newstate.channelId === null) {
         console.log("It's all disconnected!")
         console.log(`disconnect username: ${oldstate.member.displayName}`)
         console.log(`disconnect userisbot: ${oldstate.member.user.bot}`)
-        if ( !oldstate.member.user.bot && oldstate.channelId === currentGuild.members.me.voice.channel.id  ) {
+        const currentGuild = await client.guilds.cache.get(oldstate.guild.id)
+        if ( !oldstate.member.user.bot && currentGuild.members.me.voice.channel && oldstate.channelId === currentGuild.members.me.voice.channel.id  ) {
             text = oldstate.member.displayName + lang.USER_DISCONNECTED
         }
-        const currentGuild = await client.guilds.cache.get(oldstate.guild.id)
         //console.log(currentGuild)
         if (oldstate.channel.members.size < 2 && currentGuild.members.me.voice.channel && oldstate.channelId === currentGuild.members.me.voice.channel.id  ) {
             const connection = getVoiceConnection(oldstate.guild.id);
@@ -633,6 +586,10 @@ client.on('voiceStateUpdate', async (oldstate, newstate) => {
                     textch.send(lang.AUTO_DISCONNECT_NOLISTENER)
                 }
                 connection.destroy();
+                client.user.setPresence({
+                    activities: [{ name: lang.READY, type: ActivityType.Playing }],
+                    status: 'online',
+                });
                 currenttextchannelid = null
             }
         }
