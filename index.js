@@ -612,19 +612,19 @@ client.on('voiceStateUpdate', async (oldstate, newstate) => {
         console.log("It's all connected!" + newstate.channel.members.size)
         console.log(`connect username: ${newstate.member.displayName}`)
         console.log(`connect userisbot: ${newstate.member.user.bot}`)
-        if ( !newstate.member.user.bot ) {
+        if ( !newstate.member.user.bot && newstate.channelId === currentGuild.members.me.voice.channel.id  ) {
             text = newstate.member.displayName + lang.USER_CONNECTED
         }
     } else if (oldstate.channelId !== null && newstate.channelId === null) {
         console.log("It's all disconnected!")
         console.log(`disconnect username: ${oldstate.member.displayName}`)
         console.log(`disconnect userisbot: ${oldstate.member.user.bot}`)
-        if ( !oldstate.member.user.bot ) {
+        if ( !oldstate.member.user.bot && oldstate.channelId === currentGuild.members.me.voice.channel.id  ) {
             text = oldstate.member.displayName + lang.USER_DISCONNECTED
         }
         const currentGuild = await client.guilds.cache.get(oldstate.guild.id)
         //console.log(currentGuild)
-        if (oldstate.channel.members.size < 2 && currentGuild.members.me.voice.channel && oldstate.channelId === currentGuild.members.me.voice.channel.id) {
+        if (oldstate.channel.members.size < 2 && currentGuild.members.me.voice.channel && oldstate.channelId === currentGuild.members.me.voice.channel.id  ) {
             const connection = getVoiceConnection(oldstate.guild.id);
             //console.log(connection)
             if (connection !== undefined) {
