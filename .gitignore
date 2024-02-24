@@ -3,3 +3,5 @@ config.json
 userdata.json
 temp/*
 db.sqlite
+langs/*
+!langs/neutral.json

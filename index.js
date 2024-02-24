@@ -14,7 +14,7 @@ const userdata = new Keyv(database_host, { table: 'userobj' })
 const serverdata = new Keyv(database_host, { table: 'serverobj' })
 const url_regex = /https?:\/\/[-A-Z0-9+&@#/%=~_|$?!:,.]*[A-Z0-9+&@#/%=~_|$]/ig;
 const spoiler_regex = /\|\|(.*?)\|\|/ig;
-const emoji_regex = /<:(.*?):(\d+)>/g;
+const emoji_regex = /<a?:(.*?):(\d+)>/g;
 
 const client = new Client({ intents: [ GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates, GatewayIntentBits.GuildMessages, GatewayIntentBits.GuildMembers, GatewayIntentBits.MessageContent ], partials: [Partials.Channel] });
 
